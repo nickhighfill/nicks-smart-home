@@ -3,47 +3,62 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://api.fontshare.com">
+<link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet">
 <title>Nick's Smart Home</title>
 <style>
   :root {
-    --bg: #1a1a1a;
-    --card: #242424;
-    --card-hover: #2a2a2a;
-    --text: #e8e8e8;
-    --text-dim: #888;
-    --accent: #f0a030;
-    --accent-green: #1db954;
-    --border: #333;
-    --off: #444;
+    --bg: #f5f5f7;
+    --card: #ffffff;
+    --card-hover: #fafafa;
+    --text: #1d1d1f;
+    --text-dim: #86868b;
+    --accent: #ff9f0a;
+    --accent-green: #34c759;
+    --border: rgba(0,0,0,0.08);
+    --off: #e5e5ea;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-lg: 0 4px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04);
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'General Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
     padding: 24px;
     max-width: 1200px;
     margin: 0 auto;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 28px;
+    margin-bottom: 32px;
     flex-wrap: wrap;
     gap: 12px;
   }
 
-  h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.5px; }
+  h1 {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--text);
+  }
 
-  .status { font-size: 13px; color: var(--text-dim); }
+  .status {
+    font-size: 13px;
+    color: var(--text-dim);
+    font-weight: 500;
+  }
   .status .dot {
     display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-    background: #4caf50; margin-right: 6px; vertical-align: middle;
+    background: var(--accent-green); margin-right: 6px; vertical-align: middle;
   }
 
   /* ===== SECTION HEADERS ===== */
@@ -54,18 +69,20 @@
     margin-bottom: 16px;
   }
   .section-header h2 {
-    font-size: 20px;
-    font-weight: 600;
+    font-size: 22px;
+    font-weight: 700;
     letter-spacing: -0.3px;
+    color: var(--text);
   }
 
   /* ===== MODE SWITCHER ===== */
   .mode-bar {
     background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 20px 24px;
-    margin-bottom: 28px;
+    border: none;
+    border-radius: 20px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow);
   }
 
   .mode-bar-top {
@@ -73,7 +90,7 @@
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 10px;
   }
 
   .mode-buttons {
@@ -83,31 +100,33 @@
   }
 
   .mode-btn {
-    padding: 12px 22px;
-    border: 2px solid var(--border);
-    border-radius: 12px;
+    padding: 10px 20px;
+    border: 1.5px solid var(--off);
+    border-radius: 100px;
     background: var(--bg);
     color: var(--text-dim);
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
     display: flex;
     align-items: center;
     gap: 8px;
+    font-family: inherit;
   }
 
-  .mode-btn:hover { border-color: #555; color: var(--text); }
+  .mode-btn:hover { border-color: #ccc; color: var(--text); background: #eee; }
+  .mode-btn:active { transform: scale(0.97); }
 
   .mode-btn.active {
     border-color: var(--accent);
-    background: rgba(240, 160, 48, 0.1);
-    color: var(--accent);
+    background: rgba(255, 159, 10, 0.1);
+    color: #e08600;
     font-weight: 600;
   }
 
   .mode-btn .swatch {
-    width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
   }
 
   .mode-btn.circadian-btn .swatch {
@@ -115,28 +134,28 @@
   }
 
   .mode-btn.off-btn {
-    border-color: #444;
-    color: #888;
+    border-color: var(--off);
+    color: var(--text-dim);
   }
-  .mode-btn.off-btn:hover { border-color: #666; color: #aaa; }
+  .mode-btn.off-btn:hover { border-color: #ccc; color: var(--text); }
 
   .mode-label {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-dim);
-    margin-bottom: 10px;
+    margin-bottom: 12px;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    font-weight: 500;
+    letter-spacing: 1.2px;
+    font-weight: 600;
   }
 
   .mode-current {
     font-size: 13px;
     color: var(--text-dim);
-    margin-top: 4px;
+    margin-top: 6px;
   }
 
   .mode-current strong {
-    color: var(--accent);
+    color: #e08600;
     font-weight: 600;
   }
 
@@ -157,36 +176,37 @@
 
   .timeline-track {
     height: 36px;
-    border-radius: 8px;
+    border-radius: 12px;
     background: linear-gradient(to right,
-      #1a1a2e 0%, #2a1a0a 8%, #ff9933 12%, #ffcc66 20%,
+      #2c2c4a 0%, #4a3520 8%, #ff9933 12%, #ffcc66 20%,
       #ffe4aa 30%, #dde8ff 42%, #bbddff 50%, #dde8ff 58%,
-      #ffe4aa 67%, #ffcc66 75%, #ff9933 83%, #cc6600 92%, #1a1a2e 100%
+      #ffe4aa 67%, #ffcc66 75%, #ff9933 83%, #cc6600 92%, #2c2c4a 100%
     );
     position: relative;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
   }
 
   .timeline-labels {
-    display: flex; justify-content: space-between; margin-top: 4px; padding: 0 2px;
+    display: flex; justify-content: space-between; margin-top: 6px; padding: 0 2px;
   }
-  .timeline-labels span { font-size: 10px; color: var(--text-dim); }
+  .timeline-labels span { font-size: 10px; color: var(--text-dim); font-weight: 500; }
 
   .timeline-now {
     position: absolute; top: -4px; width: 3px; height: 44px;
-    background: white; border-radius: 2px; z-index: 2;
-    box-shadow: 0 0 8px rgba(255,255,255,0.6);
+    background: var(--text); border-radius: 2px; z-index: 2;
+    box-shadow: 0 0 8px rgba(0,0,0,0.3);
   }
   .timeline-now::after {
     content: attr(data-label); position: absolute; top: -18px; left: 50%;
-    transform: translateX(-50%); font-size: 10px; color: white;
-    font-weight: 600; white-space: nowrap;
+    transform: translateX(-50%); font-size: 10px; color: var(--text);
+    font-weight: 700; white-space: nowrap;
   }
 
   .timeline-dots { position: absolute; inset: 0; }
   .timeline-dot {
     position: absolute; top: 50%; transform: translate(-50%, -50%);
     width: 8px; height: 8px; border-radius: 50%;
-    background: white; border: 2px solid rgba(0,0,0,0.3); z-index: 1;
+    background: white; border: 2px solid rgba(0,0,0,0.2); z-index: 1;
   }
 
   .circadian-info {
@@ -194,10 +214,10 @@
   }
 
   .circadian-stat {
-    font-size: 13px; color: var(--text-dim);
+    font-size: 13px; color: var(--text-dim); font-weight: 500;
   }
   .circadian-stat strong {
-    color: var(--text); font-weight: 600; font-size: 15px;
+    color: var(--text); font-weight: 700; font-size: 15px;
   }
 
   /* ===== ROOMS ===== */
@@ -209,52 +229,57 @@
   }
 
   .room-card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 14px; padding: 20px; transition: all 0.2s;
+    background: var(--card); border: none;
+    border-radius: 18px; padding: 20px; transition: all 0.2s;
+    box-shadow: var(--shadow);
   }
-  .room-card.is-off { opacity: 0.45; }
+  .room-card.is-off { opacity: 0.5; }
 
   .room-top {
     display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;
   }
   .room-name { font-size: 17px; font-weight: 600; }
-  .room-lights-count { font-size: 12px; color: var(--text-dim); margin-bottom: 14px; }
+  .room-lights-count { font-size: 12px; color: var(--text-dim); margin-bottom: 14px; font-weight: 500; }
 
-  /* Toggle */
-  .toggle { position: relative; width: 52px; height: 28px; cursor: pointer; }
+  /* Toggle — Apple style */
+  .toggle { position: relative; width: 51px; height: 31px; cursor: pointer; }
   .toggle input { opacity: 0; width: 0; height: 0; }
   .toggle-track {
     position: absolute; inset: 0; background: var(--off);
-    border-radius: 14px; transition: background 0.2s;
+    border-radius: 16px; transition: background 0.25s ease;
   }
-  .toggle input:checked + .toggle-track { background: var(--accent); }
+  .toggle input:checked + .toggle-track { background: var(--accent-green); }
   .toggle-thumb {
-    position: absolute; top: 3px; left: 3px; width: 22px; height: 22px;
-    background: white; border-radius: 50%; transition: transform 0.2s; pointer-events: none;
+    position: absolute; top: 2px; left: 2px; width: 27px; height: 27px;
+    background: white; border-radius: 50%; transition: transform 0.25s ease;
+    pointer-events: none;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15), 0 1px 1px rgba(0,0,0,0.06);
   }
-  .toggle input:checked ~ .toggle-thumb { transform: translateX(24px); }
+  .toggle input:checked ~ .toggle-thumb { transform: translateX(20px); }
 
   /* Brightness / volume slider */
   .bri-row { display: flex; align-items: center; gap: 12px; }
-  .bri-label { font-size: 12px; color: var(--text-dim); flex-shrink: 0; }
-  .bri-value { font-size: 14px; font-weight: 500; min-width: 40px; text-align: right; flex-shrink: 0; }
+  .bri-label { font-size: 12px; color: var(--text-dim); flex-shrink: 0; font-weight: 500; }
+  .bri-value { font-size: 14px; font-weight: 600; min-width: 40px; text-align: right; flex-shrink: 0; }
 
   input[type="range"] {
-    -webkit-appearance: none; appearance: none; flex: 1; height: 6px;
-    border-radius: 3px; outline: none; background: var(--border);
+    -webkit-appearance: none; appearance: none; flex: 1; height: 4px;
+    border-radius: 2px; outline: none; background: var(--off);
   }
   input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none; appearance: none; width: 20px; height: 20px;
-    border-radius: 50%; background: white; cursor: pointer; border: 2px solid var(--accent);
+    -webkit-appearance: none; appearance: none; width: 22px; height: 22px;
+    border-radius: 50%; background: white; cursor: pointer; border: none;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2), 0 0 0 1px rgba(0,0,0,0.04);
   }
 
   /* ===== HOME AUDIO ===== */
   .audio-master {
     background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 16px;
+    border: none;
+    border-radius: 20px;
     padding: 20px 24px;
     margin-bottom: 16px;
+    box-shadow: var(--shadow);
   }
 
   .master-row {
@@ -265,13 +290,13 @@
 
   .master-label {
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 600;
     flex-shrink: 0;
   }
 
   .master-value {
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 600;
     min-width: 40px;
     text-align: right;
     flex-shrink: 0;
@@ -279,7 +304,7 @@
 
   .transport-btns {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     margin-left: 8px;
     flex-shrink: 0;
   }
@@ -287,10 +312,10 @@
   .transport-btn {
     width: 40px;
     height: 40px;
-    border-radius: 10px;
-    border: 1px solid var(--border);
+    border-radius: 12px;
+    border: none;
     background: var(--bg);
-    color: var(--text);
+    color: var(--text-dim);
     font-size: 16px;
     cursor: pointer;
     display: flex;
@@ -300,9 +325,10 @@
   }
 
   .transport-btn:hover {
-    border-color: var(--accent);
-    color: var(--accent);
+    background: #e8e8ed;
+    color: var(--text);
   }
+  .transport-btn:active { transform: scale(0.95); }
 
   .speakers-grid {
     display: grid;
@@ -313,13 +339,14 @@
 
   .speaker-card {
     background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 14px;
+    border: none;
+    border-radius: 18px;
     padding: 20px;
     transition: all 0.2s;
+    box-shadow: var(--shadow);
   }
 
-  .speaker-card.inactive { opacity: 0.45; }
+  .speaker-card.inactive { opacity: 0.5; }
 
   .speaker-top {
     display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;
@@ -332,6 +359,7 @@
     color: var(--text-dim);
     margin-bottom: 14px;
     min-height: 16px;
+    font-weight: 500;
   }
 
   .speaker-status.playing { color: var(--accent); }
@@ -339,13 +367,14 @@
   /* ===== SPOTIFY NOW PLAYING ===== */
   .now-playing {
     background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 16px;
+    border: none;
+    border-radius: 20px;
     padding: 16px 20px;
     margin-bottom: 16px;
     display: none;
     align-items: center;
     gap: 16px;
+    box-shadow: var(--shadow);
   }
 
   .now-playing.show { display: flex; }
@@ -353,10 +382,10 @@
   .np-art {
     width: 56px;
     height: 56px;
-    border-radius: 8px;
+    border-radius: 12px;
     object-fit: cover;
     flex-shrink: 0;
-    background: var(--border);
+    background: var(--off);
   }
 
   .np-info {
@@ -378,12 +407,14 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-weight: 500;
   }
 
   .np-device {
     font-size: 11px;
     color: var(--accent-green);
     margin-top: 2px;
+    font-weight: 500;
   }
 
   .np-controls {
@@ -395,10 +426,10 @@
   .np-btn {
     width: 36px;
     height: 36px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
+    border-radius: 10px;
+    border: none;
     background: var(--bg);
-    color: var(--text);
+    color: var(--text-dim);
     font-size: 14px;
     cursor: pointer;
     display: flex;
@@ -407,39 +438,37 @@
     transition: all 0.2s;
   }
 
-  .np-btn:hover {
-    border-color: var(--accent-green);
-    color: var(--accent-green);
-  }
+  .np-btn:hover { background: #e8e8ed; color: var(--text); }
+  .np-btn:active { transform: scale(0.93); }
 
   .np-btn.active {
-    border-color: var(--accent-green);
+    background: rgba(52, 199, 89, 0.12);
     color: var(--accent-green);
   }
 
   /* ===== SPOTIFY CONNECT ===== */
   .spotify-connect-btn {
-    padding: 8px 16px;
-    border: 2px solid var(--accent-green);
-    border-radius: 10px;
-    background: transparent;
-    color: var(--accent-green);
+    padding: 8px 18px;
+    border: none;
+    border-radius: 100px;
+    background: var(--accent-green);
+    color: white;
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
     text-decoration: none;
     display: inline-block;
+    font-family: inherit;
   }
 
-  .spotify-connect-btn:hover {
-    background: rgba(29, 185, 84, 0.1);
-  }
+  .spotify-connect-btn:hover { opacity: 0.85; }
+  .spotify-connect-btn:active { transform: scale(0.97); }
 
   .spotify-connected {
     font-size: 13px;
     color: var(--accent-green);
-    font-weight: 500;
+    font-weight: 600;
   }
 
   /* ===== SPOTIFY PLAYLISTS ===== */
@@ -452,8 +481,8 @@
 
   .playlist-card {
     background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 10px;
+    border: none;
+    border-radius: 14px;
     padding: 10px;
     cursor: pointer;
     transition: all 0.2s;
@@ -462,18 +491,16 @@
     gap: 10px;
   }
 
-  .playlist-card:hover {
-    border-color: var(--accent-green);
-    background: rgba(29, 185, 84, 0.05);
-  }
+  .playlist-card:hover { background: #e8e8ed; }
+  .playlist-card:active { transform: scale(0.98); }
 
   .playlist-art {
     width: 40px;
     height: 40px;
-    border-radius: 6px;
+    border-radius: 8px;
     object-fit: cover;
     flex-shrink: 0;
-    background: var(--border);
+    background: var(--off);
   }
 
   .playlist-name {
@@ -494,32 +521,35 @@
 
   .device-btn {
     padding: 10px 18px;
-    border: 2px solid var(--border);
-    border-radius: 12px;
+    border: 1.5px solid var(--off);
+    border-radius: 100px;
     background: var(--bg);
     color: var(--text-dim);
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
+    font-family: inherit;
   }
 
-  .device-btn:hover { border-color: #555; color: var(--text); }
+  .device-btn:hover { border-color: #ccc; color: var(--text); }
+  .device-btn:active { transform: scale(0.97); }
 
   .device-btn.active-device {
     border-color: var(--accent-green);
-    background: rgba(29, 185, 84, 0.1);
-    color: var(--accent-green);
+    background: rgba(52, 199, 89, 0.1);
+    color: #28a745;
     font-weight: 600;
   }
 
   /* ===== QUICK PLAY ===== */
   .quick-play {
     background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 20px 24px;
+    border: none;
+    border-radius: 20px;
+    padding: 24px;
     margin-bottom: 32px;
+    box-shadow: var(--shadow);
   }
 
   .station-buttons {
@@ -531,42 +561,175 @@
 
   .station-btn {
     padding: 10px 18px;
-    border: 2px solid var(--border);
-    border-radius: 12px;
+    border: 1.5px solid var(--off);
+    border-radius: 100px;
     background: var(--bg);
     color: var(--text-dim);
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
+    font-family: inherit;
   }
 
-  .station-btn:hover { border-color: #555; color: var(--text); }
+  .station-btn:hover { border-color: #ccc; color: var(--text); }
+  .station-btn:active { transform: scale(0.97); }
 
   .station-btn.playing {
     border-color: var(--accent);
-    background: rgba(240, 160, 48, 0.1);
-    color: var(--accent);
+    background: rgba(255, 159, 10, 0.1);
+    color: #e08600;
     font-weight: 600;
   }
 
   .spotify-section {
     background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 20px 24px;
+    border: none;
+    border-radius: 20px;
+    padding: 24px;
     margin-bottom: 16px;
+    box-shadow: var(--shadow);
   }
 
   /* Toast */
   .toast {
     position: fixed; bottom: 24px; left: 50%;
     transform: translateX(-50%) translateY(80px);
-    background: #333; color: white; padding: 12px 24px;
-    border-radius: 10px; font-size: 14px; opacity: 0;
-    transition: all 0.3s; pointer-events: none; z-index: 100;
+    background: var(--text); color: white; padding: 14px 28px;
+    border-radius: 100px; font-size: 14px; font-weight: 500; opacity: 0;
+    transition: all 0.3s ease; pointer-events: none; z-index: 100;
+    box-shadow: var(--shadow-lg);
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ===== AUTO WAKE ===== */
+  .auto-wake-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .wake-time-input {
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1.5px solid var(--off);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 16px;
+    font-family: inherit;
+    font-weight: 500;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .wake-time-input:focus { border-color: var(--accent); }
+
+  .auto-wake-lights {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+  }
+
+  .auto-wake-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--text);
+    cursor: pointer;
+    padding: 4px 0;
+    font-weight: 500;
+  }
+
+  .auto-wake-check.sub {
+    padding-left: 16px;
+    color: var(--text-dim);
+  }
+
+  .auto-wake-check input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent-green);
+    cursor: pointer;
+  }
+
+  .auto-wake-group-label {
+    font-size: 14px;
+    color: var(--text);
+    font-weight: 600;
+    padding: 4px 0 2px;
+    width: 100%;
+  }
+
+  /* ===== MOBILE FIXES ===== */
+  html, body { overflow-x: hidden; }
+
+  @media (max-width: 600px) {
+    body { padding: 16px; }
+
+    h1 { font-size: 26px; }
+
+    .mode-bar, .audio-master, .quick-play, .spotify-section {
+      padding: 18px;
+      border-radius: 16px;
+    }
+
+    .mode-btn {
+      padding: 9px 14px;
+      font-size: 13px;
+    }
+
+    .mode-bar-top {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .master-row {
+      flex-wrap: wrap;
+    }
+
+    .transport-btns {
+      margin-left: 0;
+      margin-top: 8px;
+      width: 100%;
+      justify-content: center;
+    }
+
+    .now-playing.show {
+      flex-wrap: wrap;
+    }
+
+    .np-controls {
+      width: 100%;
+      justify-content: center;
+      margin-top: 8px;
+    }
+
+    .rooms-grid, .speakers-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .playlists-grid {
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    }
+
+    .section-header {
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .circadian-info {
+      gap: 12px;
+    }
+
+    .circadian-stat { font-size: 12px; }
+    .circadian-stat strong { font-size: 13px; }
+
+    .room-card, .speaker-card {
+      border-radius: 16px;
+    }
+  }
 </style>
 </head>
 <body>
@@ -578,7 +741,7 @@
 
 <!-- ==================== LIGHTING ==================== -->
 <div class="section-header">
-  <h2>Lighting</h2>
+  <h2>💡 Lighting</h2>
 </div>
 
 <!-- Mode Switcher -->
@@ -609,9 +772,6 @@
       </button>
       <button class="mode-btn off-btn" onclick="allOff()">All Off</button>
     </div>
-    <button class="mode-btn test-btn" onclick="testMorning()" style="border-color:#4caf50;color:#4caf50;margin-left:auto">
-      Test Morning
-    </button>
   </div>
   <div class="mode-current" id="modeStatus"></div>
 
@@ -634,13 +794,24 @@
   </div>
 </div>
 
+<!-- Morning Auto-On -->
+<div class="mode-bar" id="autoWakeSection">
+  <div class="mode-label">🌅 Morning Auto-On</div>
+  <div class="auto-wake-row">
+    <input type="time" id="wakeTime" value="05:10" class="wake-time-input">
+    <button class="mode-btn" onclick="saveAutoWake()" style="border-color:var(--accent-green);color:#28a745">Save</button>
+    <span id="autoWakeStatus" style="font-size:12px;color:var(--text-dim)"></span>
+  </div>
+  <div class="auto-wake-lights" id="autoWakeLights"></div>
+</div>
+
 <!-- Rooms -->
 <div class="rooms-grid" id="rooms"></div>
 
 
 <!-- ==================== HOME AUDIO ==================== -->
 <div class="section-header">
-  <h2>Home Audio</h2>
+  <h2>🔊 Home Audio</h2>
   <div style="display:flex;align-items:center;gap:12px">
     <span id="spotifyStatus"></span>
     <span class="status" id="speaker-status"><span class="dot" style="background:#888"></span>Connecting...</span>
@@ -648,11 +819,11 @@
 </div>
 
 <!-- Spotify Paste URL (shown after clicking Connect) -->
-<div id="spotifyPasteSection" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px 24px;margin-bottom:16px">
+<div id="spotifyPasteSection" style="display:none;background:var(--card);border:none;border-radius:20px;padding:20px 24px;margin-bottom:16px;box-shadow:var(--shadow)">
   <div style="font-size:14px;margin-bottom:10px;color:var(--text)">After authorizing Spotify, the page won't load — that's normal. Copy the full URL from your browser bar and paste it here:</div>
   <div style="display:flex;gap:8px">
-    <input type="text" id="spotifyPasteInput" placeholder="Paste the URL here..." style="flex:1;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;outline:none">
-    <button onclick="submitSpotifyCode()" style="padding:10px 20px;border-radius:10px;border:2px solid var(--accent-green);background:transparent;color:var(--accent-green);font-weight:600;cursor:pointer;font-size:14px">Connect</button>
+    <input type="text" id="spotifyPasteInput" placeholder="Paste the URL here..." style="flex:1;padding:10px 14px;border-radius:12px;border:1.5px solid var(--off);background:var(--bg);color:var(--text);font-size:14px;outline:none;font-family:inherit">
+    <button onclick="submitSpotifyCode()" style="padding:10px 20px;border-radius:100px;border:none;background:var(--accent-green);color:white;font-weight:600;cursor:pointer;font-size:14px;font-family:inherit">Connect</button>
   </div>
 </div>
 
@@ -704,7 +875,7 @@
 
 <!-- Quick Play -->
 <div class="quick-play">
-  <div class="mode-label">Quick Play -- Internet Radio</div>
+  <div class="mode-label">📻 Quick Play — Internet Radio</div>
   <div class="station-buttons" id="stationButtons"></div>
 </div>
 
@@ -723,6 +894,13 @@ let schedulesData = {};
 let currentMode = 'circadian';
 
 // ===== HELPERS =====
+
+const _throttleTimers = {};
+function throttle(key, fn, delay = 150) {
+  if (_throttleTimers[key]) return;
+  _throttleTimers[key] = setTimeout(() => { _throttleTimers[key] = null; }, delay);
+  fn();
+}
 
 function ctToKelvin(ct) { return Math.round(1000000 / ct); }
 
@@ -939,6 +1117,116 @@ async function testMorning() {
   }, 20000);
 }
 
+// ===== AUTO WAKE =====
+const AUTOWAKE_PREFIX = 'AutoWake:';
+
+function getAutoWakeSettings() {
+  try { return JSON.parse(localStorage.getItem('autoWakeSettings')) || null; }
+  catch { return null; }
+}
+
+function renderAutoWake() {
+  const settings = getAutoWakeSettings() || { time: '05:10', rooms: {}, lights: {} };
+  const container = document.getElementById('autoWakeLights');
+  let html = '';
+
+  for (const [gid, group] of Object.entries(groupsData)) {
+    if (group.type !== 'Room' || group.lights.length === 0) continue;
+
+    const isMasterBedroom = group.name.toLowerCase().includes('master');
+
+    if (isMasterBedroom) {
+      html += `<div class="auto-wake-group-label">${group.name}</div>`;
+      for (const lid of group.lights) {
+        const light = lightsData[lid];
+        if (!light) continue;
+        const isBathroom = light.name.toLowerCase().includes('bathroom');
+        const enabled = settings.lights[lid] !== undefined ? settings.lights[lid] : isBathroom;
+        html += `<label class="auto-wake-check sub">
+          <input type="checkbox" ${enabled ? 'checked' : ''} data-wake-light="${lid}"> ${light.name}
+        </label>`;
+      }
+    } else {
+      const enabled = settings.rooms[gid] !== undefined ? settings.rooms[gid] : true;
+      html += `<label class="auto-wake-check">
+        <input type="checkbox" ${enabled ? 'checked' : ''} data-wake-room="${gid}"> ${group.name}
+      </label>`;
+    }
+  }
+
+  container.innerHTML = html;
+  document.getElementById('wakeTime').value = settings.time;
+
+  // Show status of existing schedules
+  const existing = Object.entries(schedulesData).filter(([id, s]) => s.name && s.name.startsWith(AUTOWAKE_PREFIX));
+  const statusEl = document.getElementById('autoWakeStatus');
+  if (existing.length > 0) {
+    const enabled = existing.filter(([id, s]) => s.status === 'enabled').length;
+    statusEl.textContent = `${enabled} schedule${enabled !== 1 ? 's' : ''} active`;
+    statusEl.style.color = '#4caf50';
+  } else {
+    statusEl.textContent = 'Not saved yet';
+    statusEl.style.color = '';
+  }
+}
+
+async function saveAutoWake() {
+  const time = document.getElementById('wakeTime').value;
+  if (!time) { toast('Set a time first'); return; }
+
+  const rooms = {};
+  const lights = {};
+  document.querySelectorAll('[data-wake-room]').forEach(cb => {
+    rooms[cb.dataset.wakeRoom] = cb.checked;
+  });
+  document.querySelectorAll('[data-wake-light]').forEach(cb => {
+    lights[cb.dataset.wakeLight] = cb.checked;
+  });
+
+  localStorage.setItem('autoWakeSettings', JSON.stringify({ time, rooms, lights }));
+
+  // Delete old AutoWake schedules
+  for (const [id, s] of Object.entries(schedulesData)) {
+    if (s.name && s.name.startsWith(AUTOWAKE_PREFIX)) {
+      await api(`/schedules/${id}`, 'DELETE');
+    }
+  }
+
+  const addrPrefix = `/api/${API_KEY}`;
+  const localtime = `W127/T${time}:00`;
+  const body = { on: true, ct: 400, bri: 254 };
+
+  // Create room schedules
+  for (const [gid, enabled] of Object.entries(rooms)) {
+    if (!enabled) continue;
+    const group = groupsData[gid];
+    if (!group) continue;
+    await api('/schedules', 'POST', {
+      name: `${AUTOWAKE_PREFIX} ${group.name}`,
+      command: { address: `${addrPrefix}/groups/${gid}/action`, method: 'PUT', body },
+      localtime,
+      status: 'enabled'
+    });
+  }
+
+  // Create individual light schedules
+  for (const [lid, enabled] of Object.entries(lights)) {
+    if (!enabled) continue;
+    const light = lightsData[lid];
+    if (!light) continue;
+    await api('/schedules', 'POST', {
+      name: `${AUTOWAKE_PREFIX} ${light.name}`,
+      command: { address: `${addrPrefix}/lights/${lid}/state`, method: 'PUT', body },
+      localtime,
+      status: 'enabled'
+    });
+  }
+
+  await loadSchedules();
+  renderAutoWake();
+  toast(`Auto-on saved for ${time}`);
+}
+
 // ===== ROOMS =====
 
 async function loadLights() {
@@ -986,8 +1274,7 @@ function render() {
         <div class="bri-row">
           <span class="bri-label">Brightness</span>
           <input type="range" min="1" max="254" value="${avgBri}"
-            oninput="document.getElementById('bri-room-${gid}').textContent = Math.round((this.value/254)*100)+'%'"
-            onchange="setRoomBrightness('${gid}', this.value)">
+            oninput="document.getElementById('bri-room-${gid}').textContent = Math.round((this.value/254)*100)+'%'; throttle('bri-${gid}', () => setRoomBrightness('${gid}', this.value))">
           <span class="bri-value" id="bri-room-${gid}">${Math.round((avgBri / 254) * 100)}%</span>
         </div>
       </div>`;
@@ -1404,7 +1691,7 @@ async function spotifyShuffle() {
 
 // ===== INIT =====
 loadLights().then(() => {
-  loadSchedules();
+  loadSchedules().then(() => renderAutoWake());
   for (const [lid, light] of Object.entries(lightsData)) {
     prevLightStates[lid] = light.state.on;
   }
