@@ -1,0 +1,1430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nick's Smart Home</title>
+<style>
+  :root {
+    --bg: #1a1a1a;
+    --card: #242424;
+    --card-hover: #2a2a2a;
+    --text: #e8e8e8;
+    --text-dim: #888;
+    --accent: #f0a030;
+    --accent-green: #1db954;
+    --border: #333;
+    --off: #444;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.5px; }
+
+  .status { font-size: 13px; color: var(--text-dim); }
+  .status .dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: #4caf50; margin-right: 6px; vertical-align: middle;
+  }
+
+  /* ===== SECTION HEADERS ===== */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .section-header h2 {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+  }
+
+  /* ===== MODE SWITCHER ===== */
+  .mode-bar {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+  }
+
+  .mode-bar-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .mode-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .mode-btn {
+    padding: 12px 22px;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg);
+    color: var(--text-dim);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .mode-btn:hover { border-color: #555; color: var(--text); }
+
+  .mode-btn.active {
+    border-color: var(--accent);
+    background: rgba(240, 160, 48, 0.1);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .mode-btn .swatch {
+    width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+  }
+
+  .mode-btn.circadian-btn .swatch {
+    background: linear-gradient(135deg, #99ccff, #ffd27f, #ff9933);
+  }
+
+  .mode-btn.off-btn {
+    border-color: #444;
+    color: #888;
+  }
+  .mode-btn.off-btn:hover { border-color: #666; color: #aaa; }
+
+  .mode-label {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 500;
+  }
+
+  .mode-current {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  .mode-current strong {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* ===== CIRCADIAN TIMELINE ===== */
+  .circadian-panel {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    display: none;
+  }
+
+  .circadian-panel.show { display: block; }
+
+  .timeline {
+    position: relative;
+    margin: 12px 0 8px;
+  }
+
+  .timeline-track {
+    height: 36px;
+    border-radius: 8px;
+    background: linear-gradient(to right,
+      #1a1a2e 0%, #2a1a0a 8%, #ff9933 12%, #ffcc66 20%,
+      #ffe4aa 30%, #dde8ff 42%, #bbddff 50%, #dde8ff 58%,
+      #ffe4aa 67%, #ffcc66 75%, #ff9933 83%, #cc6600 92%, #1a1a2e 100%
+    );
+    position: relative;
+  }
+
+  .timeline-labels {
+    display: flex; justify-content: space-between; margin-top: 4px; padding: 0 2px;
+  }
+  .timeline-labels span { font-size: 10px; color: var(--text-dim); }
+
+  .timeline-now {
+    position: absolute; top: -4px; width: 3px; height: 44px;
+    background: white; border-radius: 2px; z-index: 2;
+    box-shadow: 0 0 8px rgba(255,255,255,0.6);
+  }
+  .timeline-now::after {
+    content: attr(data-label); position: absolute; top: -18px; left: 50%;
+    transform: translateX(-50%); font-size: 10px; color: white;
+    font-weight: 600; white-space: nowrap;
+  }
+
+  .timeline-dots { position: absolute; inset: 0; }
+  .timeline-dot {
+    position: absolute; top: 50%; transform: translate(-50%, -50%);
+    width: 8px; height: 8px; border-radius: 50%;
+    background: white; border: 2px solid rgba(0,0,0,0.3); z-index: 1;
+  }
+
+  .circadian-info {
+    display: flex; gap: 24px; margin-top: 14px; flex-wrap: wrap;
+  }
+
+  .circadian-stat {
+    font-size: 13px; color: var(--text-dim);
+  }
+  .circadian-stat strong {
+    color: var(--text); font-weight: 600; font-size: 15px;
+  }
+
+  /* ===== ROOMS ===== */
+  .rooms-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .room-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 20px; transition: all 0.2s;
+  }
+  .room-card.is-off { opacity: 0.45; }
+
+  .room-top {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;
+  }
+  .room-name { font-size: 17px; font-weight: 600; }
+  .room-lights-count { font-size: 12px; color: var(--text-dim); margin-bottom: 14px; }
+
+  /* Toggle */
+  .toggle { position: relative; width: 52px; height: 28px; cursor: pointer; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-track {
+    position: absolute; inset: 0; background: var(--off);
+    border-radius: 14px; transition: background 0.2s;
+  }
+  .toggle input:checked + .toggle-track { background: var(--accent); }
+  .toggle-thumb {
+    position: absolute; top: 3px; left: 3px; width: 22px; height: 22px;
+    background: white; border-radius: 50%; transition: transform 0.2s; pointer-events: none;
+  }
+  .toggle input:checked ~ .toggle-thumb { transform: translateX(24px); }
+
+  /* Brightness / volume slider */
+  .bri-row { display: flex; align-items: center; gap: 12px; }
+  .bri-label { font-size: 12px; color: var(--text-dim); flex-shrink: 0; }
+  .bri-value { font-size: 14px; font-weight: 500; min-width: 40px; text-align: right; flex-shrink: 0; }
+
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none; flex: 1; height: 6px;
+    border-radius: 3px; outline: none; background: var(--border);
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 20px; height: 20px;
+    border-radius: 50%; background: white; cursor: pointer; border: 2px solid var(--accent);
+  }
+
+  /* ===== HOME AUDIO ===== */
+  .audio-master {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+
+  .master-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .master-label {
+    font-size: 14px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+
+  .master-value {
+    font-size: 14px;
+    font-weight: 500;
+    min-width: 40px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .transport-btns {
+    display: flex;
+    gap: 8px;
+    margin-left: 8px;
+    flex-shrink: 0;
+  }
+
+  .transport-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+
+  .transport-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .speakers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .speaker-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    transition: all 0.2s;
+  }
+
+  .speaker-card.inactive { opacity: 0.45; }
+
+  .speaker-top {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;
+  }
+
+  .speaker-name { font-size: 17px; font-weight: 600; }
+
+  .speaker-status {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 14px;
+    min-height: 16px;
+  }
+
+  .speaker-status.playing { color: var(--accent); }
+
+  /* ===== SPOTIFY NOW PLAYING ===== */
+  .now-playing {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    display: none;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .now-playing.show { display: flex; }
+
+  .np-art {
+    width: 56px;
+    height: 56px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--border);
+  }
+
+  .np-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .np-track {
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .np-artist {
+    font-size: 13px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .np-device {
+    font-size: 11px;
+    color: var(--accent-green);
+    margin-top: 2px;
+  }
+
+  .np-controls {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .np-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+
+  .np-btn:hover {
+    border-color: var(--accent-green);
+    color: var(--accent-green);
+  }
+
+  .np-btn.active {
+    border-color: var(--accent-green);
+    color: var(--accent-green);
+  }
+
+  /* ===== SPOTIFY CONNECT ===== */
+  .spotify-connect-btn {
+    padding: 8px 16px;
+    border: 2px solid var(--accent-green);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--accent-green);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    display: inline-block;
+  }
+
+  .spotify-connect-btn:hover {
+    background: rgba(29, 185, 84, 0.1);
+  }
+
+  .spotify-connected {
+    font-size: 13px;
+    color: var(--accent-green);
+    font-weight: 500;
+  }
+
+  /* ===== SPOTIFY PLAYLISTS ===== */
+  .playlists-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .playlist-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .playlist-card:hover {
+    border-color: var(--accent-green);
+    background: rgba(29, 185, 84, 0.05);
+  }
+
+  .playlist-art {
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--border);
+  }
+
+  .playlist-name {
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ===== SPOTIFY DEVICES ===== */
+  .devices-grid {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+
+  .device-btn {
+    padding: 10px 18px;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg);
+    color: var(--text-dim);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .device-btn:hover { border-color: #555; color: var(--text); }
+
+  .device-btn.active-device {
+    border-color: var(--accent-green);
+    background: rgba(29, 185, 84, 0.1);
+    color: var(--accent-green);
+    font-weight: 600;
+  }
+
+  /* ===== QUICK PLAY ===== */
+  .quick-play {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px 24px;
+    margin-bottom: 32px;
+  }
+
+  .station-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+
+  .station-btn {
+    padding: 10px 18px;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg);
+    color: var(--text-dim);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .station-btn:hover { border-color: #555; color: var(--text); }
+
+  .station-btn.playing {
+    border-color: var(--accent);
+    background: rgba(240, 160, 48, 0.1);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .spotify-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: #333; color: white; padding: 12px 24px;
+    border-radius: 10px; font-size: 14px; opacity: 0;
+    transition: all 0.3s; pointer-events: none; z-index: 100;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Nick's Smart Home</h1>
+  <span class="status" id="status"><span class="dot"></span>Connected to Bridge</span>
+</header>
+
+<!-- ==================== LIGHTING ==================== -->
+<div class="section-header">
+  <h2>Lighting</h2>
+</div>
+
+<!-- Mode Switcher -->
+<div class="mode-bar">
+  <div class="mode-label">Lighting Mode</div>
+  <div class="mode-bar-top">
+    <div class="mode-buttons">
+      <button class="mode-btn circadian-btn" onclick="activateCircadian()" id="modeCircadian">
+        <span class="swatch"></span>Circadian
+      </button>
+      <button class="mode-btn" onclick="applyPreset(500)" data-ct="500">
+        <span class="swatch" style="background:#ff8800"></span>Nightlight
+      </button>
+      <button class="mode-btn" onclick="applyPreset(400)" data-ct="400">
+        <span class="swatch" style="background:#ffaa33"></span>Warm
+      </button>
+      <button class="mode-btn" onclick="applyPreset(370)" data-ct="370">
+        <span class="swatch" style="background:#ffbb55"></span>Relaxed
+      </button>
+      <button class="mode-btn" onclick="applyPreset(300)" data-ct="300">
+        <span class="swatch" style="background:#ffd688"></span>Neutral
+      </button>
+      <button class="mode-btn" onclick="applyPreset(250)" data-ct="250">
+        <span class="swatch" style="background:#ffe4aa"></span>Focus
+      </button>
+      <button class="mode-btn" onclick="applyPreset(182)" data-ct="182">
+        <span class="swatch" style="background:#dde8ff"></span>Daylight
+      </button>
+      <button class="mode-btn off-btn" onclick="allOff()">All Off</button>
+    </div>
+    <button class="mode-btn test-btn" onclick="testMorning()" style="border-color:#4caf50;color:#4caf50;margin-left:auto">
+      Test Morning
+    </button>
+  </div>
+  <div class="mode-current" id="modeStatus"></div>
+
+  <!-- Circadian timeline -->
+  <div class="circadian-panel" id="circadianPanel">
+    <div class="timeline">
+      <div class="timeline-track">
+        <div class="timeline-now" id="timelineNow" data-label="Now"></div>
+        <div class="timeline-dots" id="timelineDots"></div>
+      </div>
+      <div class="timeline-labels">
+        <span>12am</span><span>3am</span><span>6am</span><span>9am</span><span>12pm</span><span>3pm</span><span>6pm</span><span>9pm</span><span>12am</span>
+      </div>
+    </div>
+    <div class="circadian-info">
+      <div class="circadian-stat">Current: <strong id="circCurrentTemp">--</strong></div>
+      <div class="circadian-stat">Brightness: <strong id="circCurrentBri">--</strong></div>
+      <div class="circadian-stat">Next shift: <strong id="circNextShift">--</strong></div>
+    </div>
+  </div>
+</div>
+
+<!-- Rooms -->
+<div class="rooms-grid" id="rooms"></div>
+
+
+<!-- ==================== HOME AUDIO ==================== -->
+<div class="section-header">
+  <h2>Home Audio</h2>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span id="spotifyStatus"></span>
+    <span class="status" id="speaker-status"><span class="dot" style="background:#888"></span>Connecting...</span>
+  </div>
+</div>
+
+<!-- Spotify Paste URL (shown after clicking Connect) -->
+<div id="spotifyPasteSection" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px 24px;margin-bottom:16px">
+  <div style="font-size:14px;margin-bottom:10px;color:var(--text)">After authorizing Spotify, the page won't load — that's normal. Copy the full URL from your browser bar and paste it here:</div>
+  <div style="display:flex;gap:8px">
+    <input type="text" id="spotifyPasteInput" placeholder="Paste the URL here..." style="flex:1;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;outline:none">
+    <button onclick="submitSpotifyCode()" style="padding:10px 20px;border-radius:10px;border:2px solid var(--accent-green);background:transparent;color:var(--accent-green);font-weight:600;cursor:pointer;font-size:14px">Connect</button>
+  </div>
+</div>
+
+<!-- Spotify Now Playing -->
+<div class="now-playing" id="nowPlaying">
+  <img class="np-art" id="npArt" src="" alt="">
+  <div class="np-info">
+    <div class="np-track" id="npTrack">Not Playing</div>
+    <div class="np-artist" id="npArtist"></div>
+    <div class="np-device" id="npDevice"></div>
+  </div>
+  <div class="np-controls">
+    <button class="np-btn" onclick="spotifyShuffle()" id="npShuffle" title="Shuffle">&#8645;</button>
+    <button class="np-btn" onclick="spotifyPrev()" title="Previous">&#9198;</button>
+    <button class="np-btn" onclick="spotifyPlayPause()" id="npPlayBtn" title="Play/Pause">&#9208;</button>
+    <button class="np-btn" onclick="spotifyNext()" title="Next">&#9197;</button>
+  </div>
+</div>
+
+<!-- Master Controls -->
+<div class="audio-master">
+  <div class="master-row">
+    <span class="master-label">Master Volume</span>
+    <input type="range" min="0" max="100" value="36" id="masterVolume"
+      oninput="document.getElementById('masterVolVal').textContent = this.value + '%'"
+      onchange="setMasterVolume(this.value)">
+    <span class="master-value" id="masterVolVal">36%</span>
+    <div class="transport-btns">
+      <button class="transport-btn" onclick="transportAll('play')" title="Play">&#9654;</button>
+      <button class="transport-btn" onclick="transportAll('pause')" title="Pause">&#10074;&#10074;</button>
+      <button class="transport-btn" onclick="transportAll('stop')" title="Stop">&#9632;</button>
+    </div>
+  </div>
+</div>
+
+<!-- Speaker Cards -->
+<div class="speakers-grid" id="speakers"></div>
+
+<!-- Spotify Playlists & Devices -->
+<div class="spotify-section" id="spotifySection" style="display:none">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+    <div class="mode-label" style="margin-bottom:0">Play On Device</div>
+  </div>
+  <div class="devices-grid" id="spotifyDevices"></div>
+
+  <div class="mode-label" style="margin-top:18px">Your Playlists</div>
+  <div class="playlists-grid" id="spotifyPlaylists"></div>
+</div>
+
+<!-- Quick Play -->
+<div class="quick-play">
+  <div class="mode-label">Quick Play -- Internet Radio</div>
+  <div class="station-buttons" id="stationButtons"></div>
+</div>
+
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== HUE BRIDGE CONFIG =====
+const BRIDGE = 'http://192.168.0.2';
+const API_KEY = 'v-I9tLBE0xEPKGNWMMqihE1YpzArq9eviFkA7SOZ';
+const API = `${BRIDGE}/api/${API_KEY}`;
+
+let lightsData = {};
+let groupsData = {};
+let schedulesData = {};
+let currentMode = 'circadian';
+
+// ===== HELPERS =====
+
+function ctToKelvin(ct) { return Math.round(1000000 / ct); }
+
+function ctToColor(ct) {
+  const ratio = (ct - 153) / (500 - 153);
+  return `rgb(255,${Math.round(180 + (1 - ratio) * 60)},${Math.round(100 + (1 - ratio) * 155)})`;
+}
+
+async function api(path, method = 'GET', body = null) {
+  const opts = { method };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(`${API}${path}`, opts);
+  return res.json();
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ===== CIRCADIAN =====
+const CIRCADIAN_PREFIX = 'Circadian:';
+
+const CIRCADIAN_STEPS = [
+  { time: '06:00', ct: 400, bri: 254, transition: 18000 },
+  { time: '07:00', ct: 320, bri: 254, transition: 36000 },
+  { time: '08:00', ct: 250, bri: 254, transition: 36000 },
+  { time: '09:30', ct: 185, bri: 254, transition: 54000 },
+  { time: '12:00', ct: 160, bri: 254, transition: 54000 },
+  { time: '15:00', ct: 200, bri: 254, transition: 54000 },
+  { time: '17:00', ct: 280, bri: 254, transition: 36000 },
+  { time: '18:30', ct: 340, bri: 254, transition: 54000 },
+  { time: '20:45', ct: 400, bri: 254, transition: 54000 },
+  { time: '21:15', ct: 440, bri: 150, transition: 18000 },
+  { time: '22:00', ct: 480, bri: 80,  transition: 27000 },
+  { time: '23:00', ct: 500, bri: 30,  transition: 36000 },
+];
+
+function getCircadianSchedules() {
+  return Object.entries(schedulesData).filter(([id, s]) => s.name && s.name.startsWith(CIRCADIAN_PREFIX));
+}
+
+function isCircadianEnabled() {
+  const cs = getCircadianSchedules();
+  return cs.length > 0 && cs.some(([id, s]) => s.status === 'enabled');
+}
+
+function stepToMins(step) {
+  const [h, m] = step.time.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function getCircadianNow() {
+  const now = new Date();
+  const mins = now.getHours() * 60 + now.getMinutes();
+
+  let prevIdx = CIRCADIAN_STEPS.length - 1;
+  let nextIdx = 0;
+  for (let i = 0; i < CIRCADIAN_STEPS.length; i++) {
+    if (mins < stepToMins(CIRCADIAN_STEPS[i])) {
+      nextIdx = i;
+      prevIdx = i > 0 ? i - 1 : CIRCADIAN_STEPS.length - 1;
+      break;
+    }
+    if (i === CIRCADIAN_STEPS.length - 1) {
+      prevIdx = i;
+      nextIdx = 0;
+    }
+  }
+
+  const prev = CIRCADIAN_STEPS[prevIdx];
+  const next = CIRCADIAN_STEPS[nextIdx];
+  const prevMins = stepToMins(prev);
+  let nextMins = stepToMins(next);
+  if (nextMins <= prevMins) nextMins += 1440;
+  let currentMins = mins;
+  if (currentMins < prevMins) currentMins += 1440;
+
+  const range = nextMins - prevMins;
+  const progress = range > 0 ? (currentMins - prevMins) / range : 0;
+
+  const ct = Math.round(prev.ct + (next.ct - prev.ct) * progress);
+  const bri = Math.round(prev.bri + (next.bri - prev.bri) * progress);
+
+  return { ct, bri, nextStep: next, nextIdx };
+}
+
+async function activateCircadian() {
+  const cs = getCircadianSchedules();
+  if (cs.length === 0) {
+    const addr = `/api/${API_KEY}/groups/0/action`;
+    for (const step of CIRCADIAN_STEPS) {
+      await api('/schedules', 'POST', {
+        name: `${CIRCADIAN_PREFIX} ${step.time.replace(':','')}`,
+        command: { address: addr, method: 'PUT', body: { ct: step.ct, bri: step.bri, transitiontime: step.transition } },
+        localtime: `W127/T${step.time}:00`,
+        status: 'enabled'
+      });
+    }
+  } else {
+    for (const [id, s] of cs) {
+      if (s.status !== 'enabled') await api(`/schedules/${id}`, 'PUT', { status: 'enabled' });
+    }
+  }
+
+  const { ct, bri } = getCircadianNow();
+  await api('/groups/0/action', 'PUT', { ct, bri, transitiontime: 30 });
+
+  currentMode = 'circadian';
+  updateModeUI();
+  await loadSchedules();
+  toast(`Circadian active — ${ctToKelvin(ct)}K`);
+}
+
+async function applyPreset(ct) {
+  const cs = getCircadianSchedules();
+  for (const [id, s] of cs) {
+    if (s.status === 'enabled') await api(`/schedules/${id}`, 'PUT', { status: 'disabled' });
+  }
+
+  const promises = Object.keys(lightsData).map(id =>
+    api(`/lights/${id}/state`, 'PUT', { on: true, ct, bri: 254 })
+  );
+  await Promise.all(promises);
+
+  for (const id of Object.keys(lightsData)) {
+    lightsData[id].state.on = true;
+    lightsData[id].state.ct = ct;
+    lightsData[id].state.bri = 254;
+  }
+
+  currentMode = `preset:${ct}`;
+  updateModeUI();
+  render();
+  await loadSchedules();
+  toast(`${ctToKelvin(ct)}K — Circadian paused`);
+}
+
+async function allOff() {
+  const promises = Object.keys(lightsData).map(id =>
+    api(`/lights/${id}/state`, 'PUT', { on: false })
+  );
+  await Promise.all(promises);
+  for (const id of Object.keys(lightsData)) {
+    lightsData[id].state.on = false;
+  }
+  currentMode = 'off';
+  updateModeUI();
+  render();
+  toast('All lights off');
+}
+
+function updateModeUI() {
+  document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+
+  const statusEl = document.getElementById('modeStatus');
+  const panel = document.getElementById('circadianPanel');
+
+  if (currentMode === 'circadian') {
+    document.getElementById('modeCircadian').classList.add('active');
+    panel.classList.add('show');
+    const { ct, bri, nextStep } = getCircadianNow();
+    statusEl.innerHTML = `<strong>Circadian</strong> — lights adapt automatically throughout the day`;
+
+    document.getElementById('circCurrentTemp').textContent = ctToKelvin(ct) + 'K';
+    document.getElementById('circCurrentBri').textContent = Math.round((bri / 254) * 100) + '%';
+
+    const [nh, nm] = nextStep.time.split(':').map(Number);
+    const h12 = nh === 0 ? 12 : nh > 12 ? nh - 12 : nh;
+    const ampm = nh < 12 ? 'AM' : 'PM';
+    document.getElementById('circNextShift').textContent = `${h12}:${String(nm).padStart(2,'0')} ${ampm} → ${ctToKelvin(nextStep.ct)}K`;
+
+    const now = new Date();
+    const mins = now.getHours() * 60 + now.getMinutes();
+    const pct = (mins / 1440) * 100;
+    document.getElementById('timelineNow').style.left = pct + '%';
+
+    const dotsEl = document.getElementById('timelineDots');
+    dotsEl.innerHTML = CIRCADIAN_STEPS.map(step => {
+      const stepPct = (stepToMins(step) / 1440) * 100;
+      return `<div class="timeline-dot" style="left:${stepPct}%" title="${step.time} — ${ctToKelvin(step.ct)}K"></div>`;
+    }).join('');
+  } else if (currentMode === 'off') {
+    panel.classList.remove('show');
+    statusEl.innerHTML = `All lights are <strong>off</strong>`;
+  } else {
+    panel.classList.remove('show');
+    const ct = parseInt(currentMode.split(':')[1]);
+    const btn = document.querySelector(`.mode-btn[data-ct="${ct}"]`);
+    if (btn) btn.classList.add('active');
+    statusEl.innerHTML = `Manual — <strong>${ctToKelvin(ct)}K</strong> at 100% brightness. Circadian paused.`;
+  }
+}
+
+// ===== TEST MORNING =====
+async function testMorning() {
+  const { ct, bri } = getCircadianNow();
+  toast(`Testing morning lights — ${ctToKelvin(ct)}K — 20 sec`);
+
+  await api('/groups/82/action', 'PUT', { on: true, ct, bri });
+  await api('/groups/86/action', 'PUT', { on: true, ct, bri });
+  await api('/lights/2/state', 'PUT', { on: true, ct, bri });
+  await api('/lights/7/state', 'PUT', { on: true, ct, bri });
+
+  setTimeout(async () => {
+    await api('/groups/82/action', 'PUT', { on: false });
+    await api('/groups/86/action', 'PUT', { on: false });
+    await api('/lights/2/state', 'PUT', { on: false });
+    await api('/lights/7/state', 'PUT', { on: false });
+    toast('Test complete — lights off');
+    loadLights();
+  }, 20000);
+}
+
+// ===== ROOMS =====
+
+async function loadLights() {
+  lightsData = await api('/lights');
+  groupsData = await api('/groups');
+  render();
+}
+
+function getCurrentCt() {
+  if (currentMode === 'circadian') {
+    return getCircadianNow().ct;
+  } else if (currentMode.startsWith('preset:')) {
+    return parseInt(currentMode.split(':')[1]);
+  }
+  return 370;
+}
+
+function render() {
+  const roomsEl = document.getElementById('rooms');
+  let html = '';
+
+  for (const [gid, group] of Object.entries(groupsData)) {
+    if (group.type !== 'Room' || group.lights.length === 0) continue;
+
+    const anyOn = group.state.any_on;
+    const lightNames = group.lights.map(id => lightsData[id]?.name).filter(Boolean);
+
+    let avgBri = 254;
+    const onLights = group.lights.filter(id => lightsData[id]?.state?.on);
+    if (onLights.length > 0) {
+      avgBri = Math.round(onLights.reduce((sum, id) => sum + (lightsData[id].state.bri || 254), 0) / onLights.length);
+    }
+
+    html += `
+      <div class="room-card ${!anyOn ? 'is-off' : ''}" id="room-${gid}">
+        <div class="room-top">
+          <span class="room-name">${group.name}</span>
+          <label class="toggle">
+            <input type="checkbox" ${anyOn ? 'checked' : ''} onchange="toggleRoom('${gid}', this.checked)">
+            <span class="toggle-track"></span>
+            <span class="toggle-thumb"></span>
+          </label>
+        </div>
+        <div class="room-lights-count">${lightNames.join(', ')}</div>
+        <div class="bri-row">
+          <span class="bri-label">Brightness</span>
+          <input type="range" min="1" max="254" value="${avgBri}"
+            oninput="document.getElementById('bri-room-${gid}').textContent = Math.round((this.value/254)*100)+'%'"
+            onchange="setRoomBrightness('${gid}', this.value)">
+          <span class="bri-value" id="bri-room-${gid}">${Math.round((avgBri / 254) * 100)}%</span>
+        </div>
+      </div>`;
+  }
+
+  roomsEl.innerHTML = html;
+}
+
+async function toggleRoom(gid, on) {
+  const group = groupsData[gid];
+  if (on) {
+    const ct = getCurrentCt();
+    await api(`/groups/${gid}/action`, 'PUT', { on: true, ct });
+  } else {
+    await api(`/groups/${gid}/action`, 'PUT', { on: false });
+  }
+
+  group.state.any_on = on;
+  group.state.all_on = on;
+  for (const lid of group.lights) {
+    if (lightsData[lid]) lightsData[lid].state.on = on;
+  }
+  document.getElementById(`room-${gid}`).classList.toggle('is-off', !on);
+  toast(`${group.name} ${on ? 'on' : 'off'}`);
+}
+
+async function setRoomBrightness(gid, bri) {
+  bri = parseInt(bri);
+  await api(`/groups/${gid}/action`, 'PUT', { bri, on: true });
+  const group = groupsData[gid];
+  group.state.any_on = true;
+  for (const lid of group.lights) {
+    if (lightsData[lid]) { lightsData[lid].state.bri = bri; lightsData[lid].state.on = true; }
+  }
+  document.getElementById(`room-${gid}`).classList.remove('is-off');
+}
+
+// ===== SCHEDULES =====
+
+async function loadSchedules() {
+  schedulesData = await api('/schedules');
+  if (isCircadianEnabled()) currentMode = 'circadian';
+  updateModeUI();
+}
+
+// ===== CIRCADIAN ENFORCER =====
+let prevLightStates = {};
+
+async function enforceCircadian() {
+  if (currentMode !== 'circadian') return;
+
+  const { ct: targetCt, bri: targetBri } = getCircadianNow();
+  const tolerance = 15;
+
+  for (const [gid, group] of Object.entries(groupsData)) {
+    if (group.type !== 'Room' || group.lights.length === 0) continue;
+    if (!group.state.any_on) continue;
+
+    let needsCorrection = false;
+    for (const lid of group.lights) {
+      const light = lightsData[lid];
+      if (!light || !light.state.on) continue;
+
+      const wasOff = prevLightStates[lid] === false || prevLightStates[lid] === undefined;
+      const ctOff = Math.abs((light.state.ct || 0) - targetCt) > tolerance;
+
+      if (wasOff || ctOff) {
+        needsCorrection = true;
+        break;
+      }
+    }
+
+    if (needsCorrection) {
+      await api(`/groups/${gid}/action`, 'PUT', { ct: targetCt, bri: targetBri, transitiontime: 30 });
+    }
+  }
+
+  for (const [lid, light] of Object.entries(lightsData)) {
+    prevLightStates[lid] = light.state.on;
+  }
+}
+
+
+// =============================================
+// ===== HOME AUDIO =====
+// =============================================
+
+const STATIONS = [
+  { name: 'Groove Salad', url: 'http://ice1.somafm.com/groovesalad-128-mp3', type: 'audio/mpeg', desc: 'Chill ambient/downtempo' },
+  { name: 'Lush', url: 'http://ice1.somafm.com/lush-128-mp3', type: 'audio/mpeg', desc: 'Downtempo vocals' },
+  { name: 'Secret Agent', url: 'http://ice1.somafm.com/secretagent-128-mp3', type: 'audio/mpeg', desc: 'Lounge & spy music' },
+  { name: 'Jazz 24', url: 'https://live.wostreaming.net/direct/ppm-jazz24aac-ibc1', type: 'audio/aac', desc: '24/7 jazz' },
+  { name: 'Drone Zone', url: 'http://ice1.somafm.com/dronezone-128-mp3', type: 'audio/mpeg', desc: 'Deep ambient' },
+  { name: 'Indie Pop', url: 'http://ice1.somafm.com/indiepop-128-mp3', type: 'audio/mpeg', desc: 'Indie & pop' },
+  { name: 'KEXP', url: 'https://kexp-mp3-128.streamguys1.com/kexp128.mp3', type: 'audio/mpeg', desc: 'Seattle indie radio' },
+  { name: 'DEF CON', url: 'http://ice1.somafm.com/defcon-128-mp3', type: 'audio/mpeg', desc: 'Hacker beats' },
+];
+
+let speakersData = [];
+let selectedSpeakers = new Set(['kitchen', 'bedroom', 'office']);
+let currentStation = null;
+
+async function speakerApi(path, method = 'GET', body = null) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(path, opts);
+  return res.json();
+}
+
+async function loadSpeakers() {
+  try {
+    speakersData = await speakerApi('/api/speakers');
+    renderSpeakers();
+    updateSpeakerStatus();
+  } catch (e) {
+    document.getElementById('speaker-status').innerHTML =
+      '<span class="dot" style="background:#f44336"></span>Server offline';
+  }
+}
+
+function updateSpeakerStatus() {
+  const connected = speakersData.filter(s => s.connected).length;
+  const total = speakersData.length;
+  const statusEl = document.getElementById('speaker-status');
+  if (connected === total && total > 0) {
+    statusEl.innerHTML = `<span class="dot" style="background:#4caf50"></span>${connected} speakers connected`;
+  } else if (connected > 0) {
+    statusEl.innerHTML = `<span class="dot" style="background:#ff9800"></span>${connected}/${total} speakers`;
+  } else {
+    statusEl.innerHTML = `<span class="dot" style="background:#f44336"></span>No speakers found`;
+  }
+}
+
+function renderSpeakers() {
+  const el = document.getElementById('speakers');
+  let html = '';
+  for (const s of speakersData) {
+    const selected = selectedSpeakers.has(s.id);
+    const vol = s.volume ?? 0;
+    let statusText = s.app || 'Idle';
+    let isPlaying = false;
+    if (s.player_state === 'PLAYING') {
+      statusText = s.title || s.app || 'Playing';
+      if (s.artist) statusText += ' — ' + s.artist;
+      isPlaying = true;
+    } else if (s.player_state === 'PAUSED') {
+      statusText = 'Paused';
+    }
+
+    html += `
+      <div class="speaker-card ${!selected ? 'inactive' : ''}" id="speaker-${s.id}">
+        <div class="speaker-top">
+          <span class="speaker-name">${s.name.replace(' speaker', '')}</span>
+          <label class="toggle">
+            <input type="checkbox" ${selected ? 'checked' : ''} onchange="toggleSpeaker('${s.id}', this.checked)">
+            <span class="toggle-track"></span>
+            <span class="toggle-thumb"></span>
+          </label>
+        </div>
+        <div class="speaker-status ${isPlaying ? 'playing' : ''}">${statusText}</div>
+        <div class="bri-row">
+          <span class="bri-label">Volume</span>
+          <input type="range" min="0" max="100" value="${vol}"
+            oninput="document.getElementById('vol-${s.id}').textContent = this.value + '%'"
+            onchange="setSpeakerVolume('${s.id}', this.value)">
+          <span class="bri-value" id="vol-${s.id}">${vol}%</span>
+        </div>
+      </div>`;
+  }
+  el.innerHTML = html;
+
+  if (speakersData.length > 0) {
+    const avg = Math.round(speakersData.reduce((sum, s) => sum + (s.volume || 0), 0) / speakersData.length);
+    document.getElementById('masterVolume').value = avg;
+    document.getElementById('masterVolVal').textContent = avg + '%';
+  }
+}
+
+function toggleSpeaker(id, on) {
+  if (on) {
+    selectedSpeakers.add(id);
+  } else {
+    selectedSpeakers.delete(id);
+  }
+  document.getElementById(`speaker-${id}`).classList.toggle('inactive', !on);
+}
+
+async function setSpeakerVolume(id, level) {
+  await speakerApi(`/api/speakers/${id}/volume`, 'POST', { level: parseInt(level) });
+}
+
+async function setMasterVolume(level) {
+  level = parseInt(level);
+  await speakerApi('/api/speakers/all/volume', 'POST', { level });
+  document.querySelectorAll('.speaker-card input[type="range"]').forEach(slider => {
+    slider.value = level;
+  });
+  speakersData.forEach(s => {
+    const valEl = document.getElementById(`vol-${s.id}`);
+    if (valEl) valEl.textContent = level + '%';
+  });
+}
+
+async function transportAll(action) {
+  const ids = [...selectedSpeakers];
+  for (const id of ids) {
+    await speakerApi(`/api/speakers/${id}/${action}`, 'POST', {});
+  }
+  if (action === 'stop') {
+    currentStation = null;
+    renderStations();
+  }
+  setTimeout(loadSpeakers, 1500);
+}
+
+async function castStation(index) {
+  const station = STATIONS[index];
+  const ids = [...selectedSpeakers];
+  if (ids.length === 0) {
+    toast('Select at least one speaker first');
+    return;
+  }
+  currentStation = index;
+  renderStations();
+  toast(`Starting ${station.name}...`);
+  await speakerApi('/api/speakers/cast', 'POST', {
+    url: station.url,
+    content_type: station.type,
+    title: station.name,
+    speakers: ids
+  });
+  toast(`Playing ${station.name} on ${ids.length} speaker${ids.length > 1 ? 's' : ''}`);
+  setTimeout(loadSpeakers, 2000);
+}
+
+function renderStations() {
+  const el = document.getElementById('stationButtons');
+  el.innerHTML = STATIONS.map((s, i) => `
+    <button class="station-btn ${currentStation === i ? 'playing' : ''}"
+      onclick="castStation(${i})" title="${s.desc}">
+      ${s.name}
+    </button>
+  `).join('');
+}
+
+
+// =============================================
+// ===== SPOTIFY =====
+// =============================================
+
+let spotifyConnected = false;
+let spotifyPlayer = null;
+let spotifyDevices = [];
+
+async function checkSpotify() {
+  try {
+    const res = await speakerApi('/api/spotify/status');
+    spotifyConnected = res.connected;
+    const el = document.getElementById('spotifyStatus');
+    if (spotifyConnected) {
+      el.innerHTML = '<span class="spotify-connected">Spotify connected</span>';
+      document.getElementById('spotifySection').style.display = 'block';
+      document.getElementById('spotifyPasteSection').style.display = 'none';
+      loadSpotifyPlayer();
+      loadSpotifyPlaylists();
+      loadSpotifyDevices();
+    } else {
+      el.innerHTML = '<a href="/spotify/login" class="spotify-connect-btn" target="_blank" onclick="showPasteField()">Connect Spotify</a>';
+      document.getElementById('spotifyPasteSection').style.display = 'none';
+    }
+  } catch (e) {}
+}
+
+function showPasteField() {
+  setTimeout(() => {
+    document.getElementById('spotifyPasteSection').style.display = 'block';
+  }, 1000);
+}
+
+async function submitSpotifyCode() {
+  const input = document.getElementById('spotifyPasteInput');
+  const url = input.value.trim();
+  if (!url) return;
+  try {
+    const res = await speakerApi('/api/spotify/manual-callback', 'POST', { url });
+    if (res.ok) {
+      toast('Spotify connected!');
+      input.value = '';
+      checkSpotify();
+    } else {
+      toast('Error: ' + (res.error || 'Failed'));
+    }
+  } catch (e) {
+    toast('Connection failed');
+  }
+}
+
+async function loadSpotifyPlayer() {
+  if (!spotifyConnected) return;
+  try {
+    const data = await speakerApi('/api/spotify/player');
+    spotifyPlayer = data;
+    renderNowPlaying(data);
+  } catch (e) {}
+}
+
+function renderNowPlaying(data) {
+  const el = document.getElementById('nowPlaying');
+  if (!data || !data.item) {
+    el.classList.remove('show');
+    return;
+  }
+  el.classList.add('show');
+
+  const track = data.item;
+  const art = track.album?.images?.[1]?.url || track.album?.images?.[0]?.url || '';
+  document.getElementById('npArt').src = art;
+  document.getElementById('npTrack').textContent = track.name;
+  document.getElementById('npArtist').textContent = track.artists?.map(a => a.name).join(', ') || '';
+  document.getElementById('npDevice').textContent = data.device ? 'Playing on ' + data.device.name : '';
+
+  const playBtn = document.getElementById('npPlayBtn');
+  playBtn.innerHTML = data.is_playing ? '&#9208;' : '&#9654;';
+
+  const shuffleBtn = document.getElementById('npShuffle');
+  shuffleBtn.classList.toggle('active', data.shuffle_state);
+}
+
+async function loadSpotifyPlaylists() {
+  if (!spotifyConnected) return;
+  try {
+    const data = await speakerApi('/api/spotify/playlists');
+    const el = document.getElementById('spotifyPlaylists');
+    if (!data.items) return;
+    el.innerHTML = data.items.map(pl => {
+      const art = pl.images?.[0]?.url || '';
+      return `
+        <div class="playlist-card" onclick="playPlaylist('${pl.uri}')">
+          ${art ? `<img class="playlist-art" src="${art}" alt="">` : '<div class="playlist-art"></div>'}
+          <span class="playlist-name">${pl.name}</span>
+        </div>`;
+    }).join('');
+  } catch (e) {}
+}
+
+async function loadSpotifyDevices() {
+  if (!spotifyConnected) return;
+  try {
+    const data = await speakerApi('/api/spotify/devices');
+    spotifyDevices = data.devices || [];
+    renderDevices();
+  } catch (e) {}
+}
+
+function renderDevices() {
+  const el = document.getElementById('spotifyDevices');
+  if (spotifyDevices.length === 0) {
+    el.innerHTML = '<span style="font-size:12px;color:var(--text-dim)">No active Spotify devices. Start playing on your phone first, then transfer here.</span>';
+    return;
+  }
+  el.innerHTML = spotifyDevices.map(d => `
+    <button class="device-btn ${d.is_active ? 'active-device' : ''}"
+      onclick="transferPlayback('${d.id}')">
+      ${d.name}
+    </button>
+  `).join('');
+}
+
+async function playPlaylist(uri) {
+  // If there's an active device, play on it. Otherwise pick first available.
+  const activeDevice = spotifyDevices.find(d => d.is_active);
+  const device = activeDevice || spotifyDevices[0];
+  const body = { context_uri: uri };
+  if (device) body.device_id = device.id;
+  await speakerApi('/api/spotify/play', 'PUT', body);
+  toast('Playing playlist');
+  setTimeout(loadSpotifyPlayer, 1000);
+  setTimeout(loadSpotifyDevices, 1000);
+}
+
+async function transferPlayback(deviceId) {
+  await speakerApi('/api/spotify/transfer', 'PUT', { device_ids: [deviceId] });
+  toast('Transferred playback');
+  setTimeout(loadSpotifyPlayer, 1000);
+  setTimeout(loadSpotifyDevices, 1000);
+}
+
+async function spotifyPlayPause() {
+  if (spotifyPlayer?.is_playing) {
+    await speakerApi('/api/spotify/pause', 'PUT', {});
+  } else {
+    await speakerApi('/api/spotify/play', 'PUT', {});
+  }
+  setTimeout(loadSpotifyPlayer, 500);
+}
+
+async function spotifyNext() {
+  await speakerApi('/api/spotify/next', 'POST', {});
+  setTimeout(loadSpotifyPlayer, 500);
+}
+
+async function spotifyPrev() {
+  await speakerApi('/api/spotify/previous', 'POST', {});
+  setTimeout(loadSpotifyPlayer, 500);
+}
+
+async function spotifyShuffle() {
+  const newState = !(spotifyPlayer?.shuffle_state);
+  await speakerApi('/api/spotify/shuffle', 'PUT', { state: newState });
+  toast(newState ? 'Shuffle on' : 'Shuffle off');
+  setTimeout(loadSpotifyPlayer, 500);
+}
+
+
+// ===== INIT =====
+loadLights().then(() => {
+  loadSchedules();
+  for (const [lid, light] of Object.entries(lightsData)) {
+    prevLightStates[lid] = light.state.on;
+  }
+});
+
+renderStations();
+loadSpeakers();
+checkSpotify();
+
+setInterval(async () => {
+  await loadLights();
+  await loadSchedules();
+  await enforceCircadian();
+}, 10000);
+setInterval(() => {
+  if (currentMode === 'circadian') updateModeUI();
+}, 60000);
+setInterval(loadSpeakers, 10000);
+setInterval(loadSpotifyPlayer, 5000);
+setInterval(loadSpotifyDevices, 15000);
+</script>
+</body>
+</html>
