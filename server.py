@@ -276,10 +276,27 @@ def spotify_devices():
     data = spotify_api('/me/player/devices')
     return jsonify(data or {'devices': []})
 
+PREFERRED_DEVICE_NAME = 'Everywhere'
+
+def find_preferred_device():
+    """Find the Everywhere speaker group, or fall back to any active device."""
+    devices = spotify_api('/me/player/devices')
+    if not devices or not devices.get('devices'):
+        return None
+    for d in devices['devices']:
+        if d['name'] == PREFERRED_DEVICE_NAME:
+            return d['id']
+    for d in devices['devices']:
+        if d['is_active']:
+            return d['id']
+    return None
+
 @app.route('/api/spotify/play', methods=['PUT'])
 def spotify_play():
     data = request.json or {}
     device_id = data.get('device_id')
+    if not device_id:
+        device_id = find_preferred_device()
     path = '/me/player/play'
     if device_id:
         path += f'?device_id={device_id}'
