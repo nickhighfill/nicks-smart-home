@@ -283,7 +283,23 @@ def spotify_playlists():
 @app.route('/api/spotify/devices')
 def spotify_devices():
     data = spotify_api('/me/player/devices')
-    return jsonify(data or {'devices': []})
+    devices = data.get('devices', []) if data else []
+    # Always include Everywhere if we have the Cast group connected
+    if everywhere_group:
+        has_everywhere = any(d['name'] == EVERYWHERE_GROUP_NAME for d in devices)
+        if not has_everywhere:
+            devices.append({
+                'id': 'everywhere_cast',
+                'is_active': False,
+                'is_private_session': False,
+                'is_restricted': False,
+                'name': EVERYWHERE_GROUP_NAME,
+                'supports_volume': True,
+                'type': 'CastAudio',
+                'volume_percent': 50,
+                '_cast_group': True
+            })
+    return jsonify({'devices': devices})
 
 PREFERRED_DEVICE_NAME = 'Everywhere'
 
@@ -298,17 +314,18 @@ def wake_everywhere():
         except Exception as e:
             print(f"Wake error: {e}")
 
-def find_preferred_device(retries=4):
+def find_preferred_device():
     """Find the Everywhere speaker group, waking it if needed."""
-    for attempt in range(retries):
-        devices = spotify_api('/me/player/devices')
-        if devices and devices.get('devices'):
-            for d in devices['devices']:
-                if d['name'] == PREFERRED_DEVICE_NAME:
-                    return d['id']
-        if attempt < retries - 1:
-            wake_everywhere()
-            time.sleep(6)
+    # First check if it's already visible
+    devices = spotify_api('/me/player/devices')
+    if devices and devices.get('devices'):
+        for d in devices['devices']:
+            if d['name'] == PREFERRED_DEVICE_NAME:
+                return d['id']
+    # Try to wake it
+    real_id = resolve_everywhere_id()
+    if real_id:
+        return real_id
     # Fall back to any active device
     devices = spotify_api('/me/player/devices')
     if devices and devices.get('devices'):
@@ -321,6 +338,8 @@ def find_preferred_device(retries=4):
 def spotify_play():
     data = request.json or {}
     device_id = data.get('device_id')
+    if device_id == 'everywhere_cast':
+        device_id = resolve_everywhere_id()
     if not device_id:
         device_id = find_preferred_device()
     path = '/me/player/play'
@@ -357,10 +376,31 @@ def spotify_shuffle():
     result = spotify_api(f'/me/player/shuffle?state={str(state).lower()}', 'PUT')
     return jsonify(result or {'ok': True})
 
+def resolve_everywhere_id():
+    """Wake the Everywhere group and find its real Spotify device ID."""
+    wake_everywhere()
+    for attempt in range(5):
+        time.sleep(4)
+        devices = spotify_api('/me/player/devices')
+        if devices and devices.get('devices'):
+            for d in devices['devices']:
+                if d['name'] == EVERYWHERE_GROUP_NAME:
+                    print(f"Resolved Everywhere ID: {d['id']}")
+                    return d['id']
+    print("Could not resolve Everywhere device ID")
+    return None
+
 @app.route('/api/spotify/transfer', methods=['PUT'])
 def spotify_transfer():
     data = request.json
     device_ids = data.get('device_ids', [])
+    # Resolve our fake cast ID to a real Spotify device ID
+    if 'everywhere_cast' in device_ids:
+        real_id = resolve_everywhere_id()
+        if real_id:
+            device_ids = [real_id]
+        else:
+            return jsonify({'error': 'Could not wake Everywhere group'}), 500
     result = spotify_api('/me/player', 'PUT', {'device_ids': device_ids, 'play': True})
     return jsonify(result or {'ok': True})
 
