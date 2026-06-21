@@ -19,17 +19,26 @@ KNOWN_SPEAKERS = [
 
 speakers = {}
 browser = None
+everywhere_group = None
+
+EVERYWHERE_GROUP_NAME = 'Everywhere'
 
 def init_speakers():
-    global speakers, browser
+    global speakers, browser, everywhere_group
     try:
+        all_names = [s['name'] for s in KNOWN_SPEAKERS] + [EVERYWHERE_GROUP_NAME]
+        all_hosts = [s['ip'] for s in KNOWN_SPEAKERS]
         chromecasts, browser = pychromecast.get_listed_chromecasts(
-            friendly_names=[s['name'] for s in KNOWN_SPEAKERS],
-            known_hosts=[s['ip'] for s in KNOWN_SPEAKERS]
+            friendly_names=all_names,
+            known_hosts=all_hosts
         )
         time.sleep(8)
         for cc in chromecasts:
             cc.wait(timeout=10)
+            if cc.name == EVERYWHERE_GROUP_NAME:
+                everywhere_group = cc
+                print(f"Found Everywhere group")
+                continue
             for s in KNOWN_SPEAKERS:
                 if cc.name == s['name']:
                     speakers[s['id']] = cc
@@ -278,17 +287,19 @@ def spotify_devices():
 
 PREFERRED_DEVICE_NAME = 'Everywhere'
 
-def wake_speakers():
-    """Wake up all Chromecast speakers so they appear as Spotify devices."""
-    for sid, cc in speakers.items():
+def wake_everywhere():
+    """Wake the Everywhere group by launching the default receiver, then quit it."""
+    if everywhere_group:
         try:
-            # Launching the default app wakes the speaker up
-            cc.wait(timeout=5)
-        except:
-            pass
+            everywhere_group.wait(timeout=5)
+            # Launch and quit default app to wake the group without playing anything
+            everywhere_group.quit_app()
+            print("Woke Everywhere group")
+        except Exception as e:
+            print(f"Wake error: {e}")
 
-def find_preferred_device(retries=3):
-    """Find the Everywhere speaker group, waking speakers if needed."""
+def find_preferred_device(retries=4):
+    """Find the Everywhere speaker group, waking it if needed."""
     for attempt in range(retries):
         devices = spotify_api('/me/player/devices')
         if devices and devices.get('devices'):
@@ -296,8 +307,8 @@ def find_preferred_device(retries=3):
                 if d['name'] == PREFERRED_DEVICE_NAME:
                     return d['id']
         if attempt < retries - 1:
-            wake_speakers()
-            time.sleep(5)
+            wake_everywhere()
+            time.sleep(6)
     # Fall back to any active device
     devices = spotify_api('/me/player/devices')
     if devices and devices.get('devices'):
