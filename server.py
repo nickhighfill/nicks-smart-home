@@ -12,9 +12,9 @@ app = Flask(__name__)
 
 # ===== SPEAKER CONFIG =====
 KNOWN_SPEAKERS = [
-    {'id': 'kitchen', 'name': 'Kitchen speaker', 'ip': '192.168.0.23'},
-    {'id': 'bedroom', 'name': 'Master Bedroom speaker', 'ip': '192.168.0.24'},
-    {'id': 'office', 'name': 'Nicks Office speaker', 'ip': '192.168.0.28'},
+    {'id': 'kitchen', 'name': 'Kitchen speaker', 'ip': '192.168.1.110'},
+    {'id': 'bedroom', 'name': 'Master Bedroom speaker', 'ip': '192.168.1.157'},
+    {'id': 'office', 'name': 'Office', 'ip': '192.168.1.36'},
 ]
 
 speakers = {}
