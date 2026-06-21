@@ -7,6 +7,7 @@ import json
 import os
 import base64
 from urllib.parse import urlencode
+from spotify_controller import SpotifyController
 
 app = Flask(__name__)
 
@@ -303,29 +304,54 @@ def spotify_devices():
 
 PREFERRED_DEVICE_NAME = 'Everywhere'
 
-def wake_everywhere():
-    """Wake the Everywhere group by launching the default receiver, then quit it."""
-    if everywhere_group:
-        try:
-            everywhere_group.wait(timeout=5)
-            # Launch and quit default app to wake the group without playing anything
-            everywhere_group.quit_app()
-            print("Woke Everywhere group")
-        except Exception as e:
-            print(f"Wake error: {e}")
+def launch_spotify_on_cast():
+    """Launch the Spotify app on the Everywhere Cast group with credentials."""
+    if not everywhere_group:
+        print("No Everywhere group connected")
+        return None
+    token = get_spotify_token()
+    if not token:
+        print("No Spotify token available")
+        return None
+    try:
+        expires = spotify_tokens.get('expires_at', time.time() + 3600)
+        expires_in = int(expires - time.time())
+        ctrl = SpotifyController(everywhere_group, token, expires_in)
+        everywhere_group.register_handler(ctrl)
+        launched = ctrl.launch_app(timeout=30)
+        device_id = ctrl.device
+        if device_id:
+            print(f"Spotify launched on Everywhere, device ID: {device_id}")
+            return device_id
+        if ctrl.credential_error:
+            print("Spotify credential error on Cast group")
+        else:
+            print("Spotify launch timed out — trying API fallback")
+    except Exception as e:
+        print(f"SpotifyController error: {e}")
+    return None
 
 def find_preferred_device():
-    """Find the Everywhere speaker group, waking it if needed."""
-    # First check if it's already visible
+    """Find the Everywhere speaker group, launching Spotify on it if needed."""
+    # First check if it's already visible in API
     devices = spotify_api('/me/player/devices')
     if devices and devices.get('devices'):
         for d in devices['devices']:
             if d['name'] == PREFERRED_DEVICE_NAME:
                 return d['id']
-    # Try to wake it
-    real_id = resolve_everywhere_id()
-    if real_id:
-        return real_id
+    # Launch Spotify on the Cast group
+    device_id = launch_spotify_on_cast()
+    if device_id:
+        # Poll API to confirm it's registered
+        for _ in range(8):
+            time.sleep(3)
+            devices = spotify_api('/me/player/devices')
+            if devices and devices.get('devices'):
+                for d in devices['devices']:
+                    if d['name'] == PREFERRED_DEVICE_NAME:
+                        return d['id']
+        # Use the MD5-based device ID directly
+        return device_id
     # Fall back to any active device
     devices = spotify_api('/me/player/devices')
     if devices and devices.get('devices'):
@@ -377,16 +403,28 @@ def spotify_shuffle():
     return jsonify(result or {'ok': True})
 
 def resolve_everywhere_id():
-    """Wake the Everywhere group and find its real Spotify device ID."""
-    wake_everywhere()
-    for attempt in range(5):
-        time.sleep(4)
-        devices = spotify_api('/me/player/devices')
-        if devices and devices.get('devices'):
-            for d in devices['devices']:
-                if d['name'] == EVERYWHERE_GROUP_NAME:
-                    print(f"Resolved Everywhere ID: {d['id']}")
-                    return d['id']
+    """Launch Spotify on the Everywhere group and get its device ID."""
+    # Check API first
+    devices = spotify_api('/me/player/devices')
+    if devices and devices.get('devices'):
+        for d in devices['devices']:
+            if d['name'] == EVERYWHERE_GROUP_NAME:
+                return d['id']
+    # Launch Spotify on the Cast group
+    device_id = launch_spotify_on_cast()
+    if device_id:
+        # Poll API to confirm
+        for _ in range(8):
+            time.sleep(3)
+            devices = spotify_api('/me/player/devices')
+            if devices and devices.get('devices'):
+                for d in devices['devices']:
+                    if d['name'] == EVERYWHERE_GROUP_NAME:
+                        print(f"Resolved Everywhere ID: {d['id']}")
+                        return d['id']
+        # Return MD5 device ID as last resort
+        print(f"Using MD5 device ID: {device_id}")
+        return device_id
     print("Could not resolve Everywhere device ID")
     return None
 
