@@ -278,17 +278,32 @@ def spotify_devices():
 
 PREFERRED_DEVICE_NAME = 'Everywhere'
 
-def find_preferred_device():
-    """Find the Everywhere speaker group, or fall back to any active device."""
+def wake_speakers():
+    """Wake up all Chromecast speakers so they appear as Spotify devices."""
+    for sid, cc in speakers.items():
+        try:
+            # Launching the default app wakes the speaker up
+            cc.wait(timeout=5)
+        except:
+            pass
+
+def find_preferred_device(retries=3):
+    """Find the Everywhere speaker group, waking speakers if needed."""
+    for attempt in range(retries):
+        devices = spotify_api('/me/player/devices')
+        if devices and devices.get('devices'):
+            for d in devices['devices']:
+                if d['name'] == PREFERRED_DEVICE_NAME:
+                    return d['id']
+        if attempt < retries - 1:
+            wake_speakers()
+            time.sleep(5)
+    # Fall back to any active device
     devices = spotify_api('/me/player/devices')
-    if not devices or not devices.get('devices'):
-        return None
-    for d in devices['devices']:
-        if d['name'] == PREFERRED_DEVICE_NAME:
-            return d['id']
-    for d in devices['devices']:
-        if d['is_active']:
-            return d['id']
+    if devices and devices.get('devices'):
+        for d in devices['devices']:
+            if d['is_active']:
+                return d['id']
     return None
 
 @app.route('/api/spotify/play', methods=['PUT'])
