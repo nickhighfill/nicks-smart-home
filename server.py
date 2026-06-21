@@ -314,21 +314,31 @@ def launch_spotify_on_cast():
         print("No Spotify token available")
         return None
     try:
+        # Refresh token if needed
+        if spotify_tokens.get('expires_at', 0) < time.time() + 60:
+            if spotify_tokens.get('refresh_token'):
+                refresh_spotify_token()
+                token = spotify_tokens.get('access_token')
+
         expires = spotify_tokens.get('expires_at', time.time() + 3600)
         expires_in = int(expires - time.time())
+        print(f"Launching Spotify on Cast with token expiring in {expires_in}s")
         ctrl = SpotifyController(everywhere_group, token, expires_in)
         everywhere_group.register_handler(ctrl)
         launched = ctrl.launch_app(timeout=30)
         device_id = ctrl.device
-        if device_id:
-            print(f"Spotify launched on Everywhere, device ID: {device_id}")
+        print(f"SpotifyController result: launched={launched}, device={device_id}, error={ctrl.credential_error}")
+        if launched and device_id:
+            return device_id
+        if device_id and not ctrl.credential_error:
+            # App launched but is_launched stayed False — known issue, try anyway
             return device_id
         if ctrl.credential_error:
             print("Spotify credential error on Cast group")
-        else:
-            print("Spotify launch timed out — trying API fallback")
     except Exception as e:
+        import traceback
         print(f"SpotifyController error: {e}")
+        traceback.print_exc()
     return None
 
 def find_preferred_device():
@@ -437,9 +447,11 @@ def spotify_transfer():
         real_id = resolve_everywhere_id()
         if real_id:
             device_ids = [real_id]
+            print(f"Transferring to Everywhere with device ID: {real_id}")
         else:
             return jsonify({'error': 'Could not wake Everywhere group'}), 500
     result = spotify_api('/me/player', 'PUT', {'device_ids': device_ids, 'play': True})
+    print(f"Transfer result: {result}")
     return jsonify(result or {'ok': True})
 
 if __name__ == '__main__':
