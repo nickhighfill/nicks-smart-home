@@ -432,6 +432,14 @@ def spotify_transfer():
     print(f"Transfer result: {result}")
     return jsonify(result or {'ok': True})
 
+@app.route('/api/circadian-brightness', methods=['POST'])
+def save_circadian_brightness():
+    data = request.json
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.circadian_brightness.json')
+    with open(path, 'w') as f:
+        json.dump(data, f)
+    return jsonify({'ok': True})
+
 if __name__ == '__main__':
     print("Nick's Smart Home server starting on http://localhost:8080")
     app.run(host='0.0.0.0', port=8080, debug=False)

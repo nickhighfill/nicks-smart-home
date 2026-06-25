@@ -3,6 +3,7 @@
 
 import time
 import json
+import os
 import urllib.request
 from datetime import datetime
 
@@ -11,15 +12,18 @@ API_KEY = 'v-I9tLBE0xEPKGNWMMqihE1YpzArq9eviFkA7SOZ'
 API = f'{BRIDGE}/api/{API_KEY}'
 
 CIRCADIAN_STEPS = [
-    {'time': '06:00', 'ct': 400, 'bri': 254},
-    {'time': '07:00', 'ct': 320, 'bri': 254},
-    {'time': '08:00', 'ct': 250, 'bri': 254},
-    {'time': '09:30', 'ct': 185, 'bri': 254},
-    {'time': '12:00', 'ct': 160, 'bri': 254},
-    {'time': '15:00', 'ct': 200, 'bri': 254},
-    {'time': '17:00', 'ct': 280, 'bri': 254},
-    {'time': '18:30', 'ct': 340, 'bri': 254},
-    {'time': '20:45', 'ct': 400, 'bri': 254},
+    {'time': '05:00', 'ct': 357, 'bri': 150},
+    {'time': '06:00', 'ct': 312, 'bri': 254},
+    {'time': '07:00', 'ct': 250, 'bri': 254},
+    {'time': '08:00', 'ct': 208, 'bri': 254},
+    {'time': '09:30', 'ct': 179, 'bri': 254},
+    {'time': '12:00', 'ct': 154, 'bri': 254},
+    {'time': '15:00', 'ct': 182, 'bri': 254},
+    {'time': '17:00', 'ct': 222, 'bri': 254},
+    {'time': '18:30', 'ct': 263, 'bri': 254},
+    {'time': '19:30', 'ct': 312, 'bri': 254},
+    {'time': '20:15', 'ct': 370, 'bri': 254},
+    {'time': '20:50', 'ct': 400, 'bri': 220},
     {'time': '21:15', 'ct': 440, 'bri': 150},
     {'time': '22:00', 'ct': 480, 'bri': 80},
     {'time': '23:00', 'ct': 500, 'bri': 30},
@@ -27,8 +31,27 @@ CIRCADIAN_STEPS = [
 
 CT_TOLERANCE = 15
 CHECK_INTERVAL = 10
+BRIGHTNESS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.circadian_brightness.json')
 
 prev_light_states = {}
+
+
+room_overrides = {}
+
+def load_custom_brightness():
+    """Load custom brightness overrides saved from the dashboard."""
+    global room_overrides
+    try:
+        if os.path.exists(BRIGHTNESS_FILE):
+            with open(BRIGHTNESS_FILE) as f:
+                custom = json.load(f)
+            master = custom.get('master', custom)
+            room_overrides = custom.get('overrides', {})
+            for step in CIRCADIAN_STEPS:
+                if step['time'] in master:
+                    step['bri'] = master[step['time']]
+    except Exception:
+        pass
 
 
 def step_to_mins(step):
@@ -66,7 +89,7 @@ def get_circadian_now():
 
     ct = round(prev_step['ct'] + (next_step['ct'] - prev_step['ct']) * progress)
     bri = round(prev_step['bri'] + (next_step['bri'] - prev_step['bri']) * progress)
-    return ct, bri
+    return ct, bri, prev_step, next_step, progress, prev_idx
 
 
 def api_get(path):
@@ -91,10 +114,48 @@ def check_circadian_enabled():
     return False
 
 
+def get_effective_room_on(gid, up_to_idx):
+    """Walk backwards through steps to find the most recent on/off state for a room."""
+    for i in range(up_to_idx, -1, -1):
+        time = CIRCADIAN_STEPS[i]['time']
+        ov = room_overrides.get(time, {}).get(gid)
+        if isinstance(ov, dict) and 'on' in ov:
+            return ov['on']
+    return True
+
+
+def get_room_override(gid, target_bri, prev_step, next_step, progress, prev_idx):
+    """Get brightness and on/off for a specific room, applying overrides if set."""
+    # Check cascading on/off state
+    if not get_effective_room_on(gid, prev_idx):
+        return target_bri, False
+
+    # Handle brightness overrides
+    prev_ov = room_overrides.get(prev_step['time'], {}).get(gid)
+    next_ov = room_overrides.get(next_step['time'], {}).get(gid)
+
+    prev_bri_ov = None
+    next_bri_ov = None
+    if isinstance(prev_ov, dict):
+        prev_bri_ov = prev_ov.get('bri')
+    elif isinstance(prev_ov, (int, float)):
+        prev_bri_ov = prev_ov
+    if isinstance(next_ov, dict):
+        next_bri_ov = next_ov.get('bri')
+    elif isinstance(next_ov, (int, float)):
+        next_bri_ov = next_ov
+
+    if prev_bri_ov is not None or next_bri_ov is not None:
+        prev_bri = prev_bri_ov if prev_bri_ov is not None else prev_step['bri']
+        next_bri = next_bri_ov if next_bri_ov is not None else next_step['bri']
+        return round(prev_bri + (next_bri - prev_bri) * progress), True
+    return target_bri, True
+
+
 def enforce():
     global prev_light_states
 
-    target_ct, target_bri = get_circadian_now()
+    target_ct, target_bri, prev_step, next_step, progress, prev_idx = get_circadian_now()
     lights = api_get('/lights')
     groups = api_get('/groups')
 
@@ -104,7 +165,14 @@ def enforce():
         if not group.get('state', {}).get('any_on'):
             continue
 
-        needs_correction = False
+        room_bri, room_on = get_room_override(gid, target_bri, prev_step, next_step, progress, prev_idx)
+
+        if not room_on:
+            # Room should be off at this time — skip enforcement
+            continue
+
+        any_just_on = False
+        any_ct_off = False
         for lid in group['lights']:
             light = lights.get(lid)
             if not light or not light.get('state', {}).get('on'):
@@ -113,24 +181,31 @@ def enforce():
             was_off = prev_light_states.get(lid) is False or lid not in prev_light_states
             ct_off = abs((light['state'].get('ct', 0)) - target_ct) > CT_TOLERANCE
 
-            if was_off or ct_off:
-                needs_correction = True
-                break
+            if was_off:
+                any_just_on = True
+            if ct_off:
+                any_ct_off = True
 
-        if needs_correction:
-            api_put(f'/groups/{gid}/action', {'ct': target_ct, 'bri': target_bri, 'transitiontime': 30})
+        if any_just_on:
+            # Light just turned on — set both ct and bri
+            api_put(f'/groups/{gid}/action', {'ct': target_ct, 'bri': room_bri, 'transitiontime': 30})
+        elif any_ct_off:
+            # Only ct is wrong — fix ct but don't touch brightness
+            api_put(f'/groups/{gid}/action', {'ct': target_ct, 'transitiontime': 30})
 
     prev_light_states = {lid: light['state']['on'] for lid, light in lights.items()}
 
 
 def main():
     print(f'Circadian Enforcer started — checking every {CHECK_INTERVAL}s')
+    load_custom_brightness()
 
     while True:
         try:
+            load_custom_brightness()
             if check_circadian_enabled():
                 enforce()
-                ct, bri = get_circadian_now()
+                ct, bri, _, _, _, _ = get_circadian_now()
         except Exception as e:
             print(f'Error: {e}')
 

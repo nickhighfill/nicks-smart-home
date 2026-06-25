@@ -220,6 +220,151 @@
     color: var(--text); font-weight: 700; font-size: 15px;
   }
 
+  .circ-customize-btn {
+    margin-top: 14px;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .circ-customize-btn:hover { color: var(--text); border-color: var(--text-dim); }
+
+  .schedule-editor {
+    display: none;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .schedule-editor.show { display: block; }
+
+  .schedule-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .schedule-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 20px;
+  }
+
+  .schedule-col {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .step-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg);
+    border-radius: 10px;
+    padding: 10px 12px;
+    min-width: 0;
+  }
+
+  .step-time {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    min-width: 58px;
+    flex-shrink: 0;
+  }
+
+  .step-temp {
+    font-size: 11px;
+    color: var(--text-dim);
+    min-width: 38px;
+    flex-shrink: 0;
+  }
+
+  .step-row input[type="range"] {
+    flex: 1;
+    min-width: 40px;
+  }
+
+  .step-bri {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    min-width: 30px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .step-tag {
+    font-size: 9px; font-weight: 700; text-transform: uppercase;
+    background: var(--accent-green); color: white;
+    padding: 2px 6px; border-radius: 4px; letter-spacing: 0.5px;
+  }
+
+  .step-expand {
+    background: none; border: none; cursor: pointer;
+    font-size: 12px; color: var(--text-dim); padding: 4px;
+    transition: transform 0.2s; flex-shrink: 0;
+  }
+  .step-expand.open { transform: rotate(180deg); }
+
+  .step-overrides {
+    display: none;
+    padding: 8px 14px 12px;
+    background: var(--bg);
+    border-radius: 0 0 10px 10px;
+    margin-top: -6px;
+  }
+  .step-overrides.show { display: block; }
+
+  .override-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 0;
+    min-width: 0;
+  }
+
+  .override-name {
+    font-size: 12px;
+    color: var(--text-dim);
+    min-width: 0;
+    flex-shrink: 1;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .override-row input[type="range"] { flex: 1; min-width: 40px; }
+
+  .override-val {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    min-width: 30px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .override-row.has-override .override-name {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .override-row.is-off input[type="range"] { opacity: 0.25; pointer-events: none; }
+  .override-row.is-off .override-val { opacity: 0.25; }
+  .override-row.is-off .override-name { opacity: 0.5; }
+
+  .toggle-sm { transform: scale(0.65); margin: -4px -6px; }
+  .toggle-sm .toggle-track { width: 40px; height: 22px; }
+
   /* ===== ROOMS ===== */
   .rooms-grid {
     display: grid;
@@ -236,10 +381,61 @@
   .room-card.is-off { opacity: 0.5; }
 
   .room-top {
-    display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; gap: 8px;
   }
-  .room-name { font-size: 17px; font-weight: 600; }
+  .room-name { font-size: 17px; font-weight: 600; flex: 1; }
+  .room-dots {
+    background: none; border: none; cursor: pointer;
+    font-size: 18px; color: var(--text-dim); padding: 4px 6px;
+    letter-spacing: 1px; line-height: 1;
+  }
+  .room-dots:hover { color: var(--text); }
   .room-lights-count { font-size: 12px; color: var(--text-dim); margin-bottom: 14px; font-weight: 500; }
+
+  /* Light detail modal */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; z-index: 1000;
+    background: rgba(0,0,0,0.5); backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    align-items: center; justify-content: center; padding: 24px;
+  }
+  .modal-overlay.show { display: flex; }
+
+  .modal-card {
+    background: var(--card); border-radius: 20px;
+    padding: 28px 24px; width: 100%; max-width: 380px;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.2);
+    max-height: 80vh; overflow-y: auto;
+  }
+
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .modal-title { font-size: 20px; font-weight: 700; }
+  .modal-close {
+    background: var(--bg); border: none; border-radius: 50%;
+    width: 32px; height: 32px; font-size: 18px;
+    cursor: pointer; color: var(--text-dim);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .modal-close:hover { color: var(--text); }
+
+  .modal-light {
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .modal-light:last-child { border-bottom: none; }
+
+  .modal-light-top {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .modal-light-name {
+    font-size: 15px; font-weight: 600;
+  }
+
+  .modal-light .bri-row { margin-top: 4px; }
 
   /* Toggle — Apple style */
   .toggle { position: relative; width: 51px; height: 31px; cursor: pointer; }
@@ -729,6 +925,28 @@
     .room-card, .speaker-card {
       border-radius: 16px;
     }
+
+    .schedule-cols {
+      grid-template-columns: 1fr;
+      gap: 0;
+    }
+
+    .step-row {
+      padding: 8px 10px;
+      gap: 6px;
+    }
+
+    .step-time { font-size: 12px; min-width: 52px; }
+    .step-temp { font-size: 10px; min-width: 34px; }
+    .step-bri { font-size: 12px; min-width: 28px; }
+    .step-tag { font-size: 8px; padding: 2px 5px; }
+
+    .override-row { gap: 4px; padding: 4px 0; }
+    .override-name { font-size: 11px; min-width: 70px; }
+    .override-val { font-size: 11px; min-width: 28px; }
+    .toggle-sm { transform: scale(0.55); margin: -5px -8px; }
+
+    .step-overrides { padding: 4px 10px 8px; }
   }
 </style>
 </head>
@@ -791,6 +1009,14 @@
       <div class="circadian-stat">Brightness: <strong id="circCurrentBri">--</strong></div>
       <div class="circadian-stat">Next shift: <strong id="circNextShift">--</strong></div>
     </div>
+    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
+      <button class="circ-customize-btn" onclick="resetToCircadian()">Reset All Lights</button>
+      <button class="circ-customize-btn" onclick="toggleScheduleEditor()">Customize Schedule</button>
+    </div>
+    <div class="schedule-editor" id="scheduleEditor">
+      <div class="schedule-steps" id="scheduleSteps"></div>
+      <button class="mode-btn" onclick="saveCustomSchedule()" style="border-color:var(--accent-green);color:#28a745;margin-top:12px;">Save Schedule</button>
+    </div>
   </div>
 </div>
 
@@ -808,6 +1034,12 @@
 <!-- Rooms -->
 <div class="rooms-grid" id="rooms"></div>
 
+<!-- Unnamed Bulbs -->
+<div id="unnamedSection" style="display:none;">
+  <h2 style="font-size:20px;font-weight:600;margin:28px 0 16px;">Unnamed Bulbs</h2>
+  <p style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">Toggle each bulb to figure out which one is where.</p>
+  <div class="rooms-grid" id="unnamedBulbs"></div>
+</div>
 
 <!-- ==================== HOME AUDIO ==================== -->
 <div class="section-header">
@@ -882,6 +1114,17 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- Light detail modal -->
+<div class="modal-overlay" id="lightModal" onclick="if(event.target===this)closeLightModal()">
+  <div class="modal-card">
+    <div class="modal-header">
+      <span class="modal-title" id="modalTitle">Room</span>
+      <button class="modal-close" onclick="closeLightModal()">&times;</button>
+    </div>
+    <div id="modalLights"></div>
+  </div>
+</div>
+
 <script>
 // ===== HUE BRIDGE CONFIG =====
 const BRIDGE = 'http://192.168.0.2';
@@ -927,18 +1170,21 @@ function toast(msg) {
 const CIRCADIAN_PREFIX = 'Circadian:';
 
 const CIRCADIAN_STEPS = [
-  { time: '06:00', ct: 400, bri: 254, transition: 18000 },
-  { time: '07:00', ct: 320, bri: 254, transition: 36000 },
-  { time: '08:00', ct: 250, bri: 254, transition: 36000 },
-  { time: '09:30', ct: 185, bri: 254, transition: 54000 },
-  { time: '12:00', ct: 160, bri: 254, transition: 54000 },
-  { time: '15:00', ct: 200, bri: 254, transition: 54000 },
-  { time: '17:00', ct: 280, bri: 254, transition: 36000 },
-  { time: '18:30', ct: 340, bri: 254, transition: 54000 },
-  { time: '20:45', ct: 400, bri: 254, transition: 54000 },
-  { time: '21:15', ct: 440, bri: 150, transition: 18000 },
-  { time: '22:00', ct: 480, bri: 80,  transition: 27000 },
-  { time: '23:00', ct: 500, bri: 30,  transition: 36000 },
+  { time: '05:00', ct: 357, bri: 150, transition: 0, turnOn: true },     // 2800K — sunrise wake
+  { time: '06:00', ct: 312, bri: 254, transition: 18000 },               // 3200K — morning
+  { time: '07:00', ct: 250, bri: 254, transition: 36000 },               // 4000K — bright morning
+  { time: '08:00', ct: 208, bri: 254, transition: 36000 },               // 4800K
+  { time: '09:30', ct: 179, bri: 254, transition: 54000 },               // 5600K
+  { time: '12:00', ct: 154, bri: 254, transition: 54000 },               // 6500K — peak daylight
+  { time: '15:00', ct: 182, bri: 254, transition: 54000 },               // 5500K
+  { time: '17:00', ct: 222, bri: 254, transition: 36000 },               // 4500K — still bright
+  { time: '18:30', ct: 263, bri: 254, transition: 54000 },               // 3800K — pre-sunset
+  { time: '19:30', ct: 312, bri: 254, transition: 36000 },               // 3200K — sunset
+  { time: '20:15', ct: 370, bri: 254, transition: 27000 },               // 2700K — golden hour
+  { time: '20:50', ct: 400, bri: 220, transition: 21000 },               // 2500K — winding down
+  { time: '21:15', ct: 440, bri: 150, transition: 15000 },               // 2273K — evening dim
+  { time: '22:00', ct: 480, bri: 80,  transition: 27000 },               // 2083K — low
+  { time: '23:00', ct: 500, bri: 30,  transition: 36000 },               // 2000K — near off
 ];
 
 function getCircadianSchedules() {
@@ -997,7 +1243,7 @@ async function activateCircadian() {
     for (const step of CIRCADIAN_STEPS) {
       await api('/schedules', 'POST', {
         name: `${CIRCADIAN_PREFIX} ${step.time.replace(':','')}`,
-        command: { address: addr, method: 'PUT', body: { ct: step.ct, bri: step.bri, transitiontime: step.transition } },
+        command: { address: addr, method: 'PUT', body: Object.assign({ ct: step.ct, bri: step.bri, transitiontime: step.transition }, step.turnOn ? { on: true } : {}) },
         localtime: `W127/T${step.time}:00`,
         status: 'enabled'
       });
@@ -1095,6 +1341,283 @@ function updateModeUI() {
     if (btn) btn.classList.add('active');
     statusEl.innerHTML = `Manual — <strong>${ctToKelvin(ct)}K</strong> at 100% brightness. Circadian paused.`;
   }
+}
+
+async function resetToCircadian() {
+  const { ct, bri } = getCircadianNow();
+  await api('/groups/0/action', 'PUT', { ct, bri, transitiontime: 10 });
+  toast(`Reset — ${ctToKelvin(ct)}K at ${Math.round((bri/254)*100)}%`);
+  setTimeout(loadLights, 1000);
+}
+
+// ===== CUSTOM SCHEDULE =====
+let circadianOverrides = {};
+
+function loadCustomBrightness() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('circadianBrightness'));
+    if (saved) {
+      for (let i = 0; i < CIRCADIAN_STEPS.length; i++) {
+        if (saved[CIRCADIAN_STEPS[i].time] !== undefined) {
+          CIRCADIAN_STEPS[i].bri = saved[CIRCADIAN_STEPS[i].time];
+        }
+      }
+    }
+  } catch {}
+  try {
+    const raw = JSON.parse(localStorage.getItem('circadianOverrides')) || {};
+    // Migrate old format (plain numbers) to new format ({bri, on})
+    for (const time of Object.keys(raw)) {
+      for (const gid of Object.keys(raw[time])) {
+        const val = raw[time][gid];
+        if (typeof val === 'number') {
+          raw[time][gid] = { bri: val, on: true };
+        }
+      }
+    }
+    circadianOverrides = raw;
+  } catch { circadianOverrides = {}; }
+}
+loadCustomBrightness();
+
+// Ensure Office (84) and Guest Bedroom (88) overrides are set
+if (!localStorage.getItem('_cappedRoomsSet')) {
+  for (const step of CIRCADIAN_STEPS) {
+    if (!circadianOverrides[step.time]) circadianOverrides[step.time] = {};
+    for (const gid of ['84', '88']) {
+      const existing = circadianOverrides[step.time][gid];
+      const isOn = existing ? existing.on !== false : true;
+      circadianOverrides[step.time][gid] = { bri: 102, on: isOn };
+    }
+  }
+  localStorage.setItem('circadianOverrides', JSON.stringify(circadianOverrides));
+  localStorage.setItem('_cappedRoomsSet', '1');
+}
+
+function toggleScheduleEditor() {
+  const editor = document.getElementById('scheduleEditor');
+  const isShowing = editor.classList.toggle('show');
+  if (isShowing) renderScheduleEditor();
+}
+
+function formatTime12(time) {
+  const [h, m] = time.split(':').map(Number);
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  const ampm = h < 12 ? 'AM' : 'PM';
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
+function toggleStepOverrides(i) {
+  const panel = document.getElementById(`stepOverrides${i}`);
+  const btn = document.getElementById(`stepExpand${i}`);
+  panel.classList.toggle('show');
+  btn.classList.toggle('open');
+}
+
+function onOverrideChange(stepIdx, gid, value, masterBri) {
+  const time = CIRCADIAN_STEPS[stepIdx].time;
+  value = parseInt(value);
+  document.getElementById(`ov-val-${stepIdx}-${gid}`).textContent = Math.round((value / 254) * 100) + '%';
+  const row = document.getElementById(`ov-row-${stepIdx}-${gid}`);
+  const existing = circadianOverrides[time]?.[gid];
+  const isOn = existing ? existing.on : true;
+
+  if (value === masterBri && isOn) {
+    row.classList.remove('has-override');
+    if (circadianOverrides[time]) delete circadianOverrides[time][gid];
+  } else {
+    row.classList.add('has-override');
+    if (!circadianOverrides[time]) circadianOverrides[time] = {};
+    circadianOverrides[time][gid] = { bri: value, on: isOn };
+  }
+}
+
+function getEffectiveRoomOn(gid, upToStepIdx) {
+  // Walk backwards to find the most recent explicit on/off for this room
+  for (let i = upToStepIdx; i >= 0; i--) {
+    const time = CIRCADIAN_STEPS[i].time;
+    const ov = circadianOverrides[time]?.[gid];
+    if (ov && ov.on !== undefined) return ov.on;
+  }
+  return true; // default: on
+}
+
+function onOverrideToggle(stepIdx, gid, on) {
+  const time = CIRCADIAN_STEPS[stepIdx].time;
+
+  if (!circadianOverrides[time]) circadianOverrides[time] = {};
+  const masterSlider = document.querySelector(`#scheduleSteps [data-master-idx="${stepIdx}"]`);
+  const masterBri = parseInt(masterSlider.value);
+  const slider = document.getElementById(`ov-slider-${stepIdx}-${gid}`);
+  const bri = parseInt(slider.value);
+
+  // Check what the previous effective state was
+  const prevState = stepIdx > 0 ? getEffectiveRoomOn(gid, stepIdx - 1) : true;
+
+  if (on && prevState && bri === masterBri) {
+    // Back to default — remove override
+    delete circadianOverrides[time][gid];
+  } else {
+    circadianOverrides[time][gid] = { bri: bri, on: on };
+  }
+
+  // Re-render to update cascading states
+  renderScheduleEditor();
+}
+
+function onMasterBriChange(stepIdx, value) {
+  value = parseInt(value);
+  document.getElementById(`stepBri${stepIdx}`).textContent = Math.round((value / 254) * 100) + '%';
+  const time = CIRCADIAN_STEPS[stepIdx].time;
+  const overrides = circadianOverrides[time] || {};
+  for (const [gid, group] of Object.entries(groupsData)) {
+    if (group.type !== 'Room' || group.lights.length === 0) continue;
+    if (!overrides[gid]) {
+      const slider = document.getElementById(`ov-slider-${stepIdx}-${gid}`);
+      const val = document.getElementById(`ov-val-${stepIdx}-${gid}`);
+      if (slider) { slider.value = value; val.textContent = Math.round((value / 254) * 100) + '%'; }
+    }
+  }
+}
+
+function renderStepCard(step, i) {
+  const pct = Math.round((step.bri / 254) * 100);
+  const overrides = circadianOverrides[step.time] || {};
+  // Check if any room has an override or inherited off state at this step
+  let hasAny = Object.keys(overrides).length > 0;
+  if (!hasAny) {
+    for (const [gid, group] of Object.entries(groupsData)) {
+      if (group.type !== 'Room' || group.lights.length === 0) continue;
+      if (!getEffectiveRoomOn(gid, i)) { hasAny = true; break; }
+    }
+  }
+
+  let roomRows = '';
+  for (const [gid, group] of Object.entries(groupsData)) {
+    if (group.type !== 'Room' || group.lights.length === 0) continue;
+    const ov = overrides[gid];
+    const effectiveOn = getEffectiveRoomOn(gid, i);
+    const hasExplicitOv = ov !== undefined;
+    const val = ov ? ov.bri : step.bri;
+    const ovPct = Math.round((val / 254) * 100);
+    const isInherited = !hasExplicitOv && !effectiveOn;
+    roomRows += `
+      <div class="override-row ${hasExplicitOv || isInherited ? 'has-override' : ''} ${!effectiveOn ? 'is-off' : ''}" id="ov-row-${i}-${gid}">
+        <label class="toggle toggle-sm">
+          <input type="checkbox" ${effectiveOn ? 'checked' : ''} onchange="onOverrideToggle(${i}, '${gid}', this.checked)">
+          <span class="toggle-track"></span>
+          <span class="toggle-thumb"></span>
+        </label>
+        <span class="override-name">${group.name}</span>
+        <input type="range" min="1" max="254" value="${val}" id="ov-slider-${i}-${gid}"
+          oninput="onOverrideChange(${i}, '${gid}', this.value, parseInt(document.querySelector('#scheduleSteps [data-master-idx=\\'${i}\\']').value))">
+        <span class="override-val" id="ov-val-${i}-${gid}">${ovPct}%</span>
+      </div>`;
+  }
+
+  return `
+    <div>
+      <div class="step-row">
+        <span class="step-time">${formatTime12(step.time)}</span>
+        ${step.turnOn ? '<span class="step-tag">Lights On</span>' : `<span class="step-temp">${ctToKelvin(step.ct)}K</span>`}
+        <input type="range" min="1" max="254" value="${step.bri}" data-master-idx="${i}"
+          oninput="onMasterBriChange(${i}, this.value)">
+        <span class="step-bri" id="stepBri${i}">${pct}%</span>
+        <button class="step-expand" id="stepExpand${i}" onclick="toggleStepOverrides(${i})">&#9660;</button>
+      </div>
+      <div class="step-overrides" id="stepOverrides${i}">
+        ${roomRows}
+      </div>
+    </div>`;
+}
+
+function renderScheduleEditor() {
+  const el = document.getElementById('scheduleSteps');
+  const half = Math.ceil(CIRCADIAN_STEPS.length / 2);
+  const leftSteps = CIRCADIAN_STEPS.slice(0, half);
+  const rightSteps = CIRCADIAN_STEPS.slice(half);
+
+  el.innerHTML = `
+    <div class="schedule-cols">
+      <div class="schedule-col">
+        ${leftSteps.map((step, i) => renderStepCard(step, i)).join('')}
+      </div>
+      <div class="schedule-col">
+        ${rightSteps.map((step, i) => renderStepCard(step, i + half)).join('')}
+      </div>
+    </div>`;
+}
+
+async function saveCustomSchedule() {
+  const masterSliders = document.querySelectorAll('#scheduleSteps [data-master-idx]');
+  const saved = {};
+  masterSliders.forEach(slider => {
+    const i = parseInt(slider.dataset.masterIdx);
+    CIRCADIAN_STEPS[i].bri = parseInt(slider.value);
+    saved[CIRCADIAN_STEPS[i].time] = parseInt(slider.value);
+  });
+  localStorage.setItem('circadianBrightness', JSON.stringify(saved));
+  localStorage.setItem('circadianOverrides', JSON.stringify(circadianOverrides));
+
+  // Save to server for the Pi enforcer
+  try { await speakerApi('/api/circadian-brightness', 'POST', { master: saved, overrides: circadianOverrides }); } catch {}
+
+  // Recreate bridge schedules with new brightness values
+  if (currentMode === 'circadian') {
+    const cs = getCircadianSchedules();
+    for (const [id] of cs) {
+      await api(`/schedules/${id}`, 'DELETE');
+    }
+    const addrPrefix = `/api/${API_KEY}`;
+    for (let stepIdx = 0; stepIdx < CIRCADIAN_STEPS.length; stepIdx++) {
+      const step = CIRCADIAN_STEPS[stepIdx];
+      const overrides = circadianOverrides[step.time] || {};
+      const hasOverrides = Object.keys(overrides).length > 0;
+
+      // Check if any room has an off state (explicit or inherited) at this step
+      let anyRoomOff = false;
+      for (const [gid, group] of Object.entries(groupsData)) {
+        if (group.type !== 'Room' || group.lights.length === 0) continue;
+        if (!getEffectiveRoomOn(gid, stepIdx)) { anyRoomOff = true; break; }
+      }
+
+      if (hasOverrides || anyRoomOff) {
+        // Create per-room schedules
+        for (const [gid, group] of Object.entries(groupsData)) {
+          if (group.type !== 'Room' || group.lights.length === 0) continue;
+          const ov = overrides[gid];
+          const roomOn = getEffectiveRoomOn(gid, stepIdx);
+          const bri = ov ? ov.bri : step.bri;
+          let body;
+          if (!roomOn) {
+            body = { on: false };
+          } else {
+            body = Object.assign({ ct: step.ct, bri, transitiontime: step.transition }, (step.turnOn || !getEffectiveRoomOn(gid, stepIdx - 1)) ? { on: true } : {});
+          }
+          await api('/schedules', 'POST', {
+            name: `${CIRCADIAN_PREFIX} ${step.time.replace(':', '')}-g${gid}`,
+            command: { address: `${addrPrefix}/groups/${gid}/action`, method: 'PUT', body },
+            localtime: `W127/T${step.time}:00`,
+            status: 'enabled'
+          });
+        }
+      } else {
+        // Single schedule for all
+        await api('/schedules', 'POST', {
+          name: `${CIRCADIAN_PREFIX} ${step.time.replace(':', '')}`,
+          command: { address: `${addrPrefix}/groups/0/action`, method: 'PUT', body: Object.assign({ ct: step.ct, bri: step.bri, transitiontime: step.transition }, step.turnOn ? { on: true } : {}) },
+          localtime: `W127/T${step.time}:00`,
+          status: 'enabled'
+        });
+      }
+    }
+    const { ct, bri } = getCircadianNow();
+    await api('/groups/0/action', 'PUT', { ct, bri, transitiontime: 30 });
+    await loadSchedules();
+    updateModeUI();
+  }
+
+  toast('Schedule saved');
 }
 
 // ===== TEST MORNING =====
@@ -1264,6 +1787,7 @@ function render() {
       <div class="room-card ${!anyOn ? 'is-off' : ''}" id="room-${gid}">
         <div class="room-top">
           <span class="room-name">${group.name}</span>
+          <button class="room-dots" onclick="openLightModal('${gid}')">&middot;&middot;&middot;</button>
           <label class="toggle">
             <input type="checkbox" ${anyOn ? 'checked' : ''} onchange="toggleRoom('${gid}', this.checked)">
             <span class="toggle-track"></span>
@@ -1281,6 +1805,7 @@ function render() {
   }
 
   roomsEl.innerHTML = html;
+  renderUnnamed();
 }
 
 async function toggleRoom(gid, on) {
@@ -1312,6 +1837,130 @@ async function setRoomBrightness(gid, bri) {
   document.getElementById(`room-${gid}`).classList.remove('is-off');
 }
 
+// ===== LIGHT DETAIL MODAL =====
+function openLightModal(gid) {
+  const group = groupsData[gid];
+  if (!group) return;
+  document.getElementById('modalTitle').textContent = group.name;
+  const el = document.getElementById('modalLights');
+
+  el.innerHTML = group.lights.map(lid => {
+    const light = lightsData[lid];
+    if (!light) return '';
+    const isOn = light.state.on;
+    const bri = light.state.bri || 254;
+    const pct = Math.round((bri / 254) * 100);
+    return `
+      <div class="modal-light" id="ml-${lid}">
+        <div class="modal-light-top">
+          <span class="modal-light-name">${light.name}</span>
+          <label class="toggle">
+            <input type="checkbox" ${isOn ? 'checked' : ''} onchange="toggleModalLight('${lid}', this.checked)">
+            <span class="toggle-track"></span>
+            <span class="toggle-thumb"></span>
+          </label>
+        </div>
+        <div class="bri-row">
+          <span class="bri-label">Brightness</span>
+          <input type="range" min="1" max="254" value="${bri}"
+            oninput="document.getElementById('ml-bri-${lid}').textContent = Math.round((this.value/254)*100)+'%'; throttle('ml-${lid}', () => setModalLightBri('${lid}', this.value))">
+          <span class="bri-value" id="ml-bri-${lid}">${pct}%</span>
+        </div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('lightModal').classList.add('show');
+}
+
+function closeLightModal() {
+  document.getElementById('lightModal').classList.remove('show');
+  loadLights();
+}
+
+async function toggleModalLight(lid, on) {
+  if (on) {
+    const ct = getCurrentCt();
+    await api(`/lights/${lid}/state`, 'PUT', { on: true, ct });
+  } else {
+    await api(`/lights/${lid}/state`, 'PUT', { on: false });
+  }
+  lightsData[lid].state.on = on;
+  toast(`${lightsData[lid].name} ${on ? 'on' : 'off'}`);
+}
+
+async function setModalLightBri(lid, bri) {
+  bri = parseInt(bri);
+  await api(`/lights/${lid}/state`, 'PUT', { bri, on: true });
+  lightsData[lid].state.bri = bri;
+  lightsData[lid].state.on = true;
+}
+
+// ===== UNNAMED BULBS =====
+function getAssignedLightIds() {
+  const assigned = new Set();
+  for (const [gid, group] of Object.entries(groupsData)) {
+    if (group.type === 'Room') {
+      for (const lid of group.lights) assigned.add(lid);
+    }
+  }
+  return assigned;
+}
+
+function renderUnnamed() {
+  const assigned = getAssignedLightIds();
+  const unnamed = Object.entries(lightsData).filter(([id]) => !assigned.has(id));
+  const section = document.getElementById('unnamedSection');
+  const el = document.getElementById('unnamedBulbs');
+
+  if (unnamed.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+  el.innerHTML = unnamed.map(([id, light]) => {
+    const isOn = light.state.on;
+    return `
+      <div class="room-card ${!isOn ? 'is-off' : ''}" id="unnamed-${id}">
+        <div class="room-top">
+          <span class="room-name">${light.name}</span>
+          <label class="toggle">
+            <input type="checkbox" ${isOn ? 'checked' : ''} onchange="toggleUnnamed('${id}', this.checked)">
+            <span class="toggle-track"></span>
+            <span class="toggle-thumb"></span>
+          </label>
+        </div>
+        <div class="room-lights-count">Light #${id} — ${light.state.reachable ? 'reachable' : 'unreachable'}</div>
+        <div class="bri-row">
+          <span class="bri-label">Brightness</span>
+          <input type="range" min="1" max="254" value="${light.state.bri || 254}"
+            oninput="document.getElementById('bri-unnamed-${id}').textContent = Math.round((this.value/254)*100)+'%'; throttle('bri-u${id}', () => setUnnamedBrightness('${id}', this.value))">
+          <span class="bri-value" id="bri-unnamed-${id}">${Math.round(((light.state.bri || 254) / 254) * 100)}%</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function toggleUnnamed(lid, on) {
+  if (on) {
+    const ct = getCurrentCt();
+    await api(`/lights/${lid}/state`, 'PUT', { on: true, ct });
+  } else {
+    await api(`/lights/${lid}/state`, 'PUT', { on: false });
+  }
+  lightsData[lid].state.on = on;
+  document.getElementById(`unnamed-${lid}`).classList.toggle('is-off', !on);
+  toast(`${lightsData[lid].name} ${on ? 'on' : 'off'}`);
+}
+
+async function setUnnamedBrightness(lid, bri) {
+  bri = parseInt(bri);
+  await api(`/lights/${lid}/state`, 'PUT', { bri, on: true });
+  lightsData[lid].state.bri = bri;
+  lightsData[lid].state.on = true;
+  document.getElementById(`unnamed-${lid}`).classList.remove('is-off');
+}
+
 // ===== SCHEDULES =====
 
 async function loadSchedules() {
@@ -1333,7 +1982,8 @@ async function enforceCircadian() {
     if (group.type !== 'Room' || group.lights.length === 0) continue;
     if (!group.state.any_on) continue;
 
-    let needsCorrection = false;
+    let anyJustOn = false;
+    let anyCtOff = false;
     for (const lid of group.lights) {
       const light = lightsData[lid];
       if (!light || !light.state.on) continue;
@@ -1341,14 +1991,16 @@ async function enforceCircadian() {
       const wasOff = prevLightStates[lid] === false || prevLightStates[lid] === undefined;
       const ctOff = Math.abs((light.state.ct || 0) - targetCt) > tolerance;
 
-      if (wasOff || ctOff) {
-        needsCorrection = true;
-        break;
-      }
+      if (wasOff) anyJustOn = true;
+      if (ctOff) anyCtOff = true;
     }
 
-    if (needsCorrection) {
+    if (anyJustOn) {
+      // Light just turned on — set both ct and bri
       await api(`/groups/${gid}/action`, 'PUT', { ct: targetCt, bri: targetBri, transitiontime: 30 });
+    } else if (anyCtOff) {
+      // Only ct is wrong — fix ct, leave brightness alone
+      await api(`/groups/${gid}/action`, 'PUT', { ct: targetCt, transitiontime: 30 });
     }
   }
 
