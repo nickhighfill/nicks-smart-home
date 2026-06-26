@@ -1,11 +1,13 @@
 from flask import Flask, jsonify, request, send_from_directory, redirect
 import pychromecast
 import requests as http_requests
+from requests.exceptions import RequestException
 import time
 import threading
 import json
 import os
 import base64
+import traceback
 from urllib.parse import urlencode
 from spotify_controller import SpotifyController
 
@@ -21,32 +23,120 @@ KNOWN_SPEAKERS = [
 speakers = {}
 browser = None
 everywhere_group = None
+everywhere_connected = False
 
 EVERYWHERE_GROUP_NAME = 'Everywhere'
 
+# Lock to protect Cast discovery state
+_cast_lock = threading.Lock()
+
+
+class EverywhereStatusListener:
+    """Detects when the Everywhere Cast group drops its connection."""
+
+    def __init__(self):
+        self.connected = False
+
+    def new_connection_status(self, status):
+        global everywhere_connected
+        print(f"Everywhere connection status: {status.status}")
+        if status.status == "CONNECTED":
+            self.connected = True
+            everywhere_connected = True
+        elif status.status == "LOST":
+            self.connected = False
+            everywhere_connected = False
+            print("Everywhere group connection LOST -- will re-discover on next use")
+
+
+_everywhere_listener = EverywhereStatusListener()
+
+
 def init_speakers():
-    global speakers, browser, everywhere_group
-    try:
-        all_names = [s['name'] for s in KNOWN_SPEAKERS] + [EVERYWHERE_GROUP_NAME]
-        all_hosts = [s['ip'] for s in KNOWN_SPEAKERS]
-        chromecasts, browser = pychromecast.get_listed_chromecasts(
-            friendly_names=all_names,
-            known_hosts=all_hosts
-        )
-        time.sleep(8)
-        for cc in chromecasts:
-            cc.wait(timeout=10)
-            if cc.name == EVERYWHERE_GROUP_NAME:
-                everywhere_group = cc
-                print(f"Found Everywhere group")
-                continue
-            for s in KNOWN_SPEAKERS:
-                if cc.name == s['name']:
-                    speakers[s['id']] = cc
-                    break
-        print(f"Connected to {len(speakers)} speakers")
-    except Exception as e:
-        print(f"Speaker connection error: {e}")
+    """Initial Cast discovery with persistent browser."""
+    global speakers, browser, everywhere_group, everywhere_connected
+    with _cast_lock:
+        try:
+            all_names = [s['name'] for s in KNOWN_SPEAKERS] + [EVERYWHERE_GROUP_NAME]
+            all_hosts = [s['ip'] for s in KNOWN_SPEAKERS]
+            chromecasts, browser = pychromecast.get_listed_chromecasts(
+                friendly_names=all_names,
+                known_hosts=all_hosts,
+                discovery_timeout=15,
+            )
+            for cc in chromecasts:
+                cc.wait(timeout=10)
+                if cc.name == EVERYWHERE_GROUP_NAME:
+                    everywhere_group = cc
+                    everywhere_connected = True
+                    cc.register_connection_listener(_everywhere_listener)
+                    print("Found Everywhere group")
+                    continue
+                for s in KNOWN_SPEAKERS:
+                    if cc.name == s['name']:
+                        speakers[s['id']] = cc
+                        break
+            print(f"Connected to {len(speakers)} speakers")
+        except Exception as e:
+            print(f"Speaker connection error: {e}")
+            traceback.print_exc()
+
+
+def rediscover_everywhere():
+    """Re-discover the Everywhere Cast group on demand."""
+    global everywhere_group, browser, everywhere_connected, spotify_ctrl
+    with _cast_lock:
+        # Double-check inside the lock -- another thread may have fixed it
+        if everywhere_group is not None and everywhere_connected:
+            return everywhere_group
+        print("Re-discovering Everywhere Cast group...")
+        try:
+            # Stop the old browser if it exists
+            if browser is not None:
+                try:
+                    pychromecast.discovery.stop_discovery(browser)
+                except Exception:
+                    pass
+
+            all_names = [s['name'] for s in KNOWN_SPEAKERS] + [EVERYWHERE_GROUP_NAME]
+            all_hosts = [s['ip'] for s in KNOWN_SPEAKERS]
+            chromecasts, browser_new = pychromecast.get_listed_chromecasts(
+                friendly_names=all_names,
+                known_hosts=all_hosts,
+                discovery_timeout=15,
+            )
+            browser = browser_new
+            for cc in chromecasts:
+                cc.wait(timeout=10)
+                if cc.name == EVERYWHERE_GROUP_NAME:
+                    everywhere_group = cc
+                    everywhere_connected = True
+                    cc.register_connection_listener(_everywhere_listener)
+                    spotify_ctrl = None  # Reset controller for new cast object
+                    print("Re-discovered Everywhere group")
+                    continue
+                for s in KNOWN_SPEAKERS:
+                    if cc.name == s['name']:
+                        speakers[s['id']] = cc
+                        break
+
+            if everywhere_group is None or not everywhere_connected:
+                print("Everywhere group not found during re-discovery")
+                return None
+            return everywhere_group
+        except Exception as e:
+            print(f"Re-discovery error: {e}")
+            traceback.print_exc()
+            return None
+
+
+def get_everywhere():
+    """Get the Everywhere group, re-discovering if disconnected or None."""
+    global everywhere_group, everywhere_connected
+    if everywhere_group is not None and everywhere_connected:
+        return everywhere_group
+    return rediscover_everywhere()
+
 
 threading.Thread(target=init_speakers, daemon=True).start()
 
@@ -59,15 +149,28 @@ SPOTIFY_SCOPES = 'user-read-playback-state user-modify-playback-state user-read-
 TOKEN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.spotify_tokens.json')
 spotify_tokens = {}
 
+# Thread-safe token refresh lock
+_token_lock = threading.Lock()
+
+
 def load_tokens():
     global spotify_tokens
     if os.path.exists(TOKEN_FILE):
-        with open(TOKEN_FILE) as f:
-            spotify_tokens = json.load(f)
+        try:
+            with open(TOKEN_FILE) as f:
+                spotify_tokens = json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"Failed to load tokens: {e}")
+            spotify_tokens = {}
+
 
 def save_tokens():
-    with open(TOKEN_FILE, 'w') as f:
-        json.dump(spotify_tokens, f)
+    try:
+        with open(TOKEN_FILE, 'w') as f:
+            json.dump(spotify_tokens, f)
+    except IOError as e:
+        print(f"Failed to save tokens: {e}")
+
 
 def get_spotify_token():
     if not spotify_tokens.get('access_token'):
@@ -77,43 +180,108 @@ def get_spotify_token():
             refresh_spotify_token()
     return spotify_tokens.get('access_token')
 
-def refresh_spotify_token():
-    auth = base64.b64encode(f"{SPOTIFY_CLIENT_ID}:{SPOTIFY_CLIENT_SECRET}".encode()).decode()
-    r = http_requests.post('https://accounts.spotify.com/api/token', data={
-        'grant_type': 'refresh_token',
-        'refresh_token': spotify_tokens['refresh_token']
-    }, headers={'Authorization': f'Basic {auth}'})
-    data = r.json()
-    if 'access_token' in data:
-        spotify_tokens['access_token'] = data['access_token']
-        spotify_tokens['expires_at'] = time.time() + data.get('expires_in', 3600)
-        if 'refresh_token' in data:
-            spotify_tokens['refresh_token'] = data['refresh_token']
-        save_tokens()
 
-def spotify_api(path, method='GET', body=None):
+def refresh_spotify_token():
+    """Thread-safe token refresh with double-check."""
+    with _token_lock:
+        # Double-check: another thread may have refreshed while we waited
+        if spotify_tokens.get('expires_at', 0) > time.time() + 60:
+            return
+        try:
+            auth = base64.b64encode(f"{SPOTIFY_CLIENT_ID}:{SPOTIFY_CLIENT_SECRET}".encode()).decode()
+            r = http_requests.post('https://accounts.spotify.com/api/token', data={
+                'grant_type': 'refresh_token',
+                'refresh_token': spotify_tokens['refresh_token']
+            }, headers={'Authorization': f'Basic {auth}'}, timeout=10)
+            data = r.json()
+            if 'access_token' in data:
+                spotify_tokens['access_token'] = data['access_token']
+                spotify_tokens['expires_at'] = time.time() + data.get('expires_in', 3600)
+                if 'refresh_token' in data:
+                    spotify_tokens['refresh_token'] = data['refresh_token']
+                save_tokens()
+                print("Spotify token refreshed successfully")
+            else:
+                print(f"Token refresh failed: {data.get('error', 'unknown')}")
+        except RequestException as e:
+            print(f"Token refresh network error: {e}")
+
+
+def spotify_api(path, method='GET', body=None, _retry=True):
+    """Call the Spotify Web API with retry logic for transient errors.
+
+    _retry is an internal recursion guard -- on a 401 we refresh the token
+    and call ourselves once more with _retry=False to prevent infinite loops.
+    """
     token = get_spotify_token()
     if not token:
-        return None
+        return {'error': 'No Spotify token available'}
     headers = {'Authorization': f'Bearer {token}'}
     url = f'https://api.spotify.com/v1{path}'
-    if method == 'GET':
-        r = http_requests.get(url, headers=headers)
-    elif method == 'PUT':
-        r = http_requests.put(url, headers=headers, json=body)
-    elif method == 'POST':
-        r = http_requests.post(url, headers=headers, json=body)
-    else:
-        return None
-    if r.status_code == 204:
-        return {'ok': True}
-    if r.status_code == 401:
-        refresh_spotify_token()
-        return spotify_api(path, method, body)
-    try:
-        return r.json()
-    except:
-        return {'ok': True, 'status': r.status_code}
+
+    # Retry loop for transient failures (500, 502, 503, 429, network errors)
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            if method == 'GET':
+                r = http_requests.get(url, headers=headers, timeout=10)
+            elif method == 'PUT':
+                r = http_requests.put(url, headers=headers, json=body, timeout=10)
+            elif method == 'POST':
+                r = http_requests.post(url, headers=headers, json=body, timeout=10)
+            elif method == 'DELETE':
+                r = http_requests.delete(url, headers=headers, json=body, timeout=10)
+            else:
+                return {'error': f'Unsupported HTTP method: {method}'}
+        except RequestException as e:
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)
+                continue
+            return {'error': f'Network error after {max_retries} retries: {str(e)}'}
+
+        # Success with no content
+        if r.status_code == 204:
+            return {'ok': True}
+
+        # Rate limited -- respect Retry-After header
+        if r.status_code == 429:
+            retry_after = int(r.headers.get('Retry-After', 2))
+            print(f"Spotify rate limited, retrying after {retry_after}s")
+            if attempt < max_retries - 1:
+                time.sleep(retry_after)
+                continue
+            return {'error': 'Rate limited by Spotify', 'retry_after': retry_after}
+
+        # Server errors -- retry with backoff
+        if r.status_code in (500, 502, 503):
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)
+                continue
+            return {'error': f'Spotify server error {r.status_code} after {max_retries} retries'}
+
+        # Unauthorized -- refresh token and retry ONCE (recursion guard)
+        if r.status_code == 401:
+            if _retry:
+                refresh_spotify_token()
+                return spotify_api(path, method, body, _retry=False)
+            return {'error': 'Spotify auth failed after token refresh'}
+
+        # Client errors (400, 403, 404, etc.)
+        if r.status_code >= 400:
+            try:
+                error_data = r.json()
+            except (ValueError, KeyError):
+                error_data = {'message': f'HTTP {r.status_code}'}
+            return {'error': error_data, 'status': r.status_code}
+
+        # Successful response with body
+        try:
+            return r.json()
+        except ValueError:
+            return {'ok': True, 'status': r.status_code}
+
+    return {'error': 'Exhausted retries'}
+
 
 load_tokens()
 
@@ -121,6 +289,53 @@ load_tokens()
 @app.route('/')
 def serve_index():
     return send_from_directory('.', 'index.html')
+
+# ===== ROUTES: HEALTH CHECK =====
+@app.route('/api/health')
+def health_check():
+    """Reports Cast connection status, Spotify auth status, and speaker connectivity."""
+    # Spotify status
+    token = spotify_tokens.get('access_token')
+    expires_at = spotify_tokens.get('expires_at', 0)
+    spotify_ok = token is not None and expires_at > time.time()
+
+    # Speaker connectivity
+    speaker_status = {}
+    for info in KNOWN_SPEAKERS:
+        sid = info['id']
+        cc = speakers.get(sid)
+        if cc is not None:
+            try:
+                _ = cc.status
+                speaker_status[sid] = 'connected'
+            except Exception:
+                speaker_status[sid] = 'error'
+        else:
+            speaker_status[sid] = 'disconnected'
+
+    # Cast group status
+    eg = everywhere_group
+    if eg is not None and everywhere_connected:
+        cast_status = 'connected'
+    elif eg is not None and not everywhere_connected:
+        cast_status = 'disconnected'
+    else:
+        cast_status = 'not_found'
+
+    return jsonify({
+        'status': 'ok',
+        'spotify': {
+            'authenticated': spotify_ok,
+            'has_refresh_token': spotify_tokens.get('refresh_token') is not None,
+            'token_expires_at': expires_at,
+            'token_expires_in': max(0, int(expires_at - time.time())) if expires_at else 0,
+        },
+        'cast': {
+            'everywhere_group': cast_status,
+            'browser_active': browser is not None,
+        },
+        'speakers': speaker_status,
+    })
 
 # ===== ROUTES: SPEAKERS =====
 @app.route('/api/speakers')
@@ -151,61 +366,89 @@ def get_speakers():
         result.append(entry)
     return jsonify(result)
 
+
 @app.route('/api/speakers/<sid>/volume', methods=['POST'])
 def set_volume(sid):
     level = request.json.get('level', 50)
     targets = list(speakers.values()) if sid == 'all' else [speakers.get(sid)]
+    errors = []
     for cc in targets:
         if cc:
-            cc.set_volume(level / 100.0)
+            try:
+                cc.set_volume(level / 100.0)
+            except Exception as e:
+                errors.append(str(e))
+    if errors:
+        return jsonify({'ok': False, 'errors': errors}), 500
     return jsonify({'ok': True})
+
 
 @app.route('/api/speakers/cast', methods=['POST'])
 def cast_audio():
     data = request.json
-    url = data['url']
+    url = data.get('url')
+    if not url:
+        return jsonify({'error': 'Missing url parameter'}), 400
     content_type = data.get('content_type', 'audio/mpeg')
     title = data.get('title', 'Stream')
     target_ids = data.get('speakers', list(speakers.keys()))
+    errors = []
     for sid in target_ids:
         cc = speakers.get(sid)
         if cc:
-            mc = cc.media_controller
-            mc.play_media(url, content_type, title=title)
-            mc.block_until_active(timeout=10)
+            try:
+                mc = cc.media_controller
+                mc.play_media(url, content_type, title=title)
+                mc.block_until_active(timeout=10)
+            except Exception as e:
+                errors.append(f"{sid}: {str(e)}")
+    if errors:
+        return jsonify({'ok': False, 'errors': errors}), 500
     return jsonify({'ok': True})
+
 
 @app.route('/api/speakers/<sid>/stop', methods=['POST'])
 def stop_speaker(sid):
     targets = list(speakers.values()) if sid == 'all' else [speakers.get(sid)]
+    errors = []
     for cc in targets:
         if cc:
             try:
                 cc.media_controller.stop()
-            except:
-                pass
+            except Exception as e:
+                errors.append(str(e))
+    if errors:
+        return jsonify({'ok': False, 'errors': errors}), 500
     return jsonify({'ok': True})
+
 
 @app.route('/api/speakers/<sid>/pause', methods=['POST'])
 def pause_speaker(sid):
     targets = list(speakers.values()) if sid == 'all' else [speakers.get(sid)]
+    errors = []
     for cc in targets:
         if cc:
             try:
                 cc.media_controller.pause()
-            except:
-                pass
+            except Exception as e:
+                errors.append(str(e))
+    if errors:
+        return jsonify({'ok': False, 'errors': errors}), 500
     return jsonify({'ok': True})
+
 
 @app.route('/api/speakers/<sid>/play', methods=['POST'])
 def play_speaker(sid):
     targets = list(speakers.values()) if sid == 'all' else [speakers.get(sid)]
+    errors = []
     for cc in targets:
         if cc:
             try:
                 cc.media_controller.play()
-            except:
-                pass
+            except Exception as e:
+                errors.append(str(e))
+    if errors:
+        return jsonify({'ok': False, 'errors': errors}), 500
     return jsonify({'ok': True})
 
 # ===== ROUTES: SPOTIFY AUTH =====
@@ -219,6 +462,7 @@ def spotify_login():
     })
     return redirect(f'https://accounts.spotify.com/authorize?{params}')
 
+
 @app.route('/callback')
 def spotify_callback():
     code = request.args.get('code')
@@ -226,18 +470,24 @@ def spotify_callback():
     if error:
         return redirect('/')
     auth = base64.b64encode(f"{SPOTIFY_CLIENT_ID}:{SPOTIFY_CLIENT_SECRET}".encode()).decode()
-    r = http_requests.post('https://accounts.spotify.com/api/token', data={
-        'grant_type': 'authorization_code',
-        'code': code,
-        'redirect_uri': SPOTIFY_REDIRECT_URI,
-    }, headers={'Authorization': f'Basic {auth}'})
-    data = r.json()
+    try:
+        r = http_requests.post('https://accounts.spotify.com/api/token', data={
+            'grant_type': 'authorization_code',
+            'code': code,
+            'redirect_uri': SPOTIFY_REDIRECT_URI,
+        }, headers={'Authorization': f'Basic {auth}'}, timeout=10)
+        data = r.json()
+    except RequestException as e:
+        print(f"Spotify callback network error: {e}")
+        return redirect('/')
     if 'access_token' in data:
-        spotify_tokens['access_token'] = data['access_token']
-        spotify_tokens['refresh_token'] = data.get('refresh_token')
-        spotify_tokens['expires_at'] = time.time() + data.get('expires_in', 3600)
-        save_tokens()
+        with _token_lock:
+            spotify_tokens['access_token'] = data['access_token']
+            spotify_tokens['refresh_token'] = data.get('refresh_token')
+            spotify_tokens['expires_at'] = time.time() + data.get('expires_in', 3600)
+            save_tokens()
     return redirect('/')
+
 
 @app.route('/api/spotify/manual-callback', methods=['POST'])
 def spotify_manual_callback():
@@ -249,17 +499,21 @@ def spotify_manual_callback():
     if not code:
         return jsonify({'error': 'No code found in URL'}), 400
     auth = base64.b64encode(f"{SPOTIFY_CLIENT_ID}:{SPOTIFY_CLIENT_SECRET}".encode()).decode()
-    r = http_requests.post('https://accounts.spotify.com/api/token', data={
-        'grant_type': 'authorization_code',
-        'code': code,
-        'redirect_uri': SPOTIFY_REDIRECT_URI,
-    }, headers={'Authorization': f'Basic {auth}'})
-    data = r.json()
+    try:
+        r = http_requests.post('https://accounts.spotify.com/api/token', data={
+            'grant_type': 'authorization_code',
+            'code': code,
+            'redirect_uri': SPOTIFY_REDIRECT_URI,
+        }, headers={'Authorization': f'Basic {auth}'}, timeout=10)
+        data = r.json()
+    except RequestException as e:
+        return jsonify({'error': f'Network error: {str(e)}'}), 502
     if 'access_token' in data:
-        spotify_tokens['access_token'] = data['access_token']
-        spotify_tokens['refresh_token'] = data.get('refresh_token')
-        spotify_tokens['expires_at'] = time.time() + data.get('expires_in', 3600)
-        save_tokens()
+        with _token_lock:
+            spotify_tokens['access_token'] = data['access_token']
+            spotify_tokens['refresh_token'] = data.get('refresh_token')
+            spotify_tokens['expires_at'] = time.time() + data.get('expires_in', 3600)
+            save_tokens()
         return jsonify({'ok': True})
     return jsonify({'error': data.get('error_description', 'Token exchange failed')}), 400
 
@@ -269,26 +523,39 @@ def spotify_status():
     token = get_spotify_token()
     return jsonify({'connected': token is not None})
 
+
 @app.route('/api/spotify/player')
 def spotify_player():
     data = spotify_api('/me/player')
-    if not data:
+    if not data or 'error' in data:
         return jsonify({'is_playing': False})
     return jsonify(data)
+
 
 @app.route('/api/spotify/playlists')
 def spotify_playlists():
     data = spotify_api('/me/playlists?limit=30')
-    return jsonify(data or {'items': []})
+    if data and 'error' not in data:
+        return jsonify(data)
+    return jsonify({'items': []})
+
 
 @app.route('/api/spotify/devices')
 def spotify_devices():
     data = spotify_api('/me/player/devices')
-    devices = data.get('devices', []) if data else []
-    # Always include Everywhere if we have the Cast group connected
-    if everywhere_group:
+    devices = data.get('devices', []) if (data and 'error' not in data) else []
+    # Always include Everywhere if we have the Cast group available
+    eg = get_everywhere()
+    if eg is not None:
         has_everywhere = any(d['name'] == EVERYWHERE_GROUP_NAME for d in devices)
         if not has_everywhere:
+            # Try to read actual volume from Cast group
+            volume_pct = None
+            try:
+                volume_pct = round(eg.status.volume_level * 100)
+            except Exception:
+                pass
+
             devices.append({
                 'id': 'everywhere_cast',
                 'is_active': False,
@@ -297,39 +564,43 @@ def spotify_devices():
                 'name': EVERYWHERE_GROUP_NAME,
                 'supports_volume': True,
                 'type': 'CastAudio',
-                'volume_percent': 50,
-                '_cast_group': True
+                'volume_percent': volume_pct if volume_pct is not None else None,
+                '_cast_group': True,
+                '_volume_estimated': volume_pct is None,
             })
     return jsonify({'devices': devices})
+
 
 PREFERRED_DEVICE_NAME = 'Everywhere'
 
 spotify_ctrl = None
 
+
 def launch_spotify_on_cast():
     """Launch the Spotify app on the Everywhere Cast group."""
     global spotify_ctrl
-    if not everywhere_group:
+    eg = get_everywhere()
+    if not eg:
         print("No Everywhere group connected")
         return False
     try:
         if spotify_ctrl is None:
-            spotify_ctrl = SpotifyController(everywhere_group)
-            everywhere_group.register_handler(spotify_ctrl)
+            spotify_ctrl = SpotifyController(eg)
+            eg.register_handler(spotify_ctrl)
         launched = spotify_ctrl.launch_app(timeout=15)
         print(f"Spotify app launch: {launched}")
         return launched
     except Exception as e:
         print(f"SpotifyController error: {e}")
-        import traceback
         traceback.print_exc()
         return False
+
 
 def wait_for_everywhere(max_wait=20):
     """Poll Spotify API until Everywhere appears, return its device ID."""
     for i in range(max_wait // 2):
         devices = spotify_api('/me/player/devices')
-        if devices and devices.get('devices'):
+        if devices and 'error' not in devices and devices.get('devices'):
             for d in devices['devices']:
                 if d['name'] == PREFERRED_DEVICE_NAME:
                     print(f"Everywhere found in API after {i*2}s: {d['id']}")
@@ -337,35 +608,83 @@ def wait_for_everywhere(max_wait=20):
         time.sleep(2)
     return None
 
-def find_preferred_device():
-    """Find the Everywhere speaker group, launching Spotify on it if needed."""
-    # First check if it's already visible
+
+def ensure_everywhere_device():
+    """Unified function to find the Everywhere device, launching it if needed.
+
+    Consolidates the old resolve_everywhere_id() and find_preferred_device().
+    Retries the full launch -> poll -> verify cycle up to 3 times.
+    Returns the Spotify device ID for the Everywhere group, or None.
+    """
+    # Quick check: is Everywhere already visible in Spotify?
     devices = spotify_api('/me/player/devices')
-    if devices and devices.get('devices'):
+    if devices and 'error' not in devices and devices.get('devices'):
         for d in devices['devices']:
             if d['name'] == PREFERRED_DEVICE_NAME:
                 return d['id']
-    # Launch Spotify on the Cast group and wait for it
-    if launch_spotify_on_cast():
-        device_id = wait_for_everywhere()
+
+    # Full launch -> poll -> verify cycle, up to 3 attempts
+    for attempt in range(3):
+        print(f"Everywhere launch attempt {attempt + 1}/3")
+
+        # If Cast group is stale, re-discover it first
+        eg = get_everywhere()
+        if not eg:
+            print("Cannot find Everywhere Cast group")
+            if attempt < 2:
+                time.sleep(2)
+                continue
+            return None
+
+        if not launch_spotify_on_cast():
+            print("Failed to launch Spotify on Cast group")
+            if attempt < 2:
+                time.sleep(2)
+                continue
+            return None
+
+        device_id = wait_for_everywhere(max_wait=20)
         if device_id:
             return device_id
-    # Fall back to any active device
-    devices = spotify_api('/me/player/devices')
-    if devices and devices.get('devices'):
-        for d in devices['devices']:
-            if d['is_active']:
-                return d['id']
+
+        print(f"Everywhere not found in Spotify API after attempt {attempt + 1}")
+        if attempt < 2:
+            time.sleep(2)
+
+    print("Could not resolve Everywhere device ID after 3 attempts")
     return None
+
+
+def verify_playback_started(device_id, timeout=10):
+    """After transferring playback, verify it actually started on the device."""
+    for i in range(timeout // 2):
+        time.sleep(2)
+        player = spotify_api('/me/player')
+        if player and 'error' not in player:
+            active_device = player.get('device', {})
+            if active_device.get('id') == device_id:
+                return True
+            if active_device.get('name') == PREFERRED_DEVICE_NAME:
+                return True
+    return False
+
 
 @app.route('/api/spotify/play', methods=['PUT'])
 def spotify_play():
     data = request.json or {}
     device_id = data.get('device_id')
     if device_id == 'everywhere_cast':
-        device_id = resolve_everywhere_id()
+        device_id = ensure_everywhere_device()
     if not device_id:
-        device_id = find_preferred_device()
+        device_id = ensure_everywhere_device()
+    if not device_id:
+        # Fall back to any active device
+        devices_resp = spotify_api('/me/player/devices')
+        if devices_resp and 'error' not in devices_resp:
+            for d in devices_resp.get('devices', []):
+                if d['is_active']:
+                    device_id = d['id']
+                    break
     path = '/me/player/play'
     if device_id:
         path += f'?device_id={device_id}'
@@ -377,44 +696,64 @@ def spotify_play():
     if 'offset' in data:
         body['offset'] = data['offset']
     result = spotify_api(path, 'PUT', body if body else None)
+    if result and 'error' in result:
+        return jsonify(result), 500
     return jsonify(result or {'ok': True})
+
 
 @app.route('/api/spotify/pause', methods=['PUT'])
 def spotify_pause():
     result = spotify_api('/me/player/pause', 'PUT')
+    if result and 'error' in result:
+        return jsonify(result), 500
     return jsonify(result or {'ok': True})
+
 
 @app.route('/api/spotify/next', methods=['POST'])
 def spotify_next():
     result = spotify_api('/me/player/next', 'POST')
+    if result and 'error' in result:
+        return jsonify(result), 500
     return jsonify(result or {'ok': True})
+
 
 @app.route('/api/spotify/previous', methods=['POST'])
 def spotify_previous():
     result = spotify_api('/me/player/previous', 'POST')
+    if result and 'error' in result:
+        return jsonify(result), 500
     return jsonify(result or {'ok': True})
+
 
 @app.route('/api/spotify/shuffle', methods=['PUT'])
 def spotify_shuffle():
     state = request.json.get('state', True)
     result = spotify_api(f'/me/player/shuffle?state={str(state).lower()}', 'PUT')
+    if result and 'error' in result:
+        return jsonify(result), 500
     return jsonify(result or {'ok': True})
 
-def resolve_everywhere_id():
-    """Launch Spotify on the Everywhere group and get its real device ID."""
-    # Check API first
-    devices = spotify_api('/me/player/devices')
-    if devices and devices.get('devices'):
-        for d in devices['devices']:
-            if d['name'] == EVERYWHERE_GROUP_NAME:
-                return d['id']
-    # Launch Spotify app and wait for it to register
-    if launch_spotify_on_cast():
-        device_id = wait_for_everywhere()
+
+@app.route('/api/spotify/volume', methods=['PUT'])
+def spotify_volume():
+    """Set Spotify playback volume (0-100)."""
+    data = request.json or {}
+    volume = data.get('volume_percent')
+    if volume is None:
+        return jsonify({'error': 'Missing volume_percent parameter'}), 400
+    volume = max(0, min(100, int(volume)))
+    device_id = data.get('device_id')
+    path = f'/me/player/volume?volume_percent={volume}'
+    if device_id:
+        if device_id == 'everywhere_cast':
+            device_id = ensure_everywhere_device()
         if device_id:
-            return device_id
-    print("Could not resolve Everywhere device ID")
-    return None
+            path += f'&device_id={device_id}'
+    result = spotify_api(path, 'PUT')
+    if result and 'error' in result:
+        return jsonify(result), 500
+    return jsonify(result or {'ok': True})
+
 
 @app.route('/api/spotify/transfer', methods=['PUT'])
 def spotify_transfer():
@@ -422,22 +761,36 @@ def spotify_transfer():
     device_ids = data.get('device_ids', [])
     # Resolve our fake cast ID to a real Spotify device ID
     if 'everywhere_cast' in device_ids:
-        real_id = resolve_everywhere_id()
+        real_id = ensure_everywhere_device()
         if real_id:
             device_ids = [real_id]
             print(f"Transferring to Everywhere with device ID: {real_id}")
         else:
             return jsonify({'error': 'Could not wake Everywhere group'}), 500
     result = spotify_api('/me/player', 'PUT', {'device_ids': device_ids, 'play': True})
+    if result and 'error' in result:
+        print(f"Transfer failed: {result}")
+        return jsonify(result), 500
+
+    # Verify playback actually started on the target
+    if device_ids:
+        started = verify_playback_started(device_ids[0], timeout=10)
+        if not started:
+            print("Warning: playback may not have started on target device")
+
     print(f"Transfer result: {result}")
     return jsonify(result or {'ok': True})
+
 
 @app.route('/api/circadian-brightness', methods=['POST'])
 def save_circadian_brightness():
     data = request.json
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.circadian_brightness.json')
-    with open(path, 'w') as f:
-        json.dump(data, f)
+    try:
+        with open(path, 'w') as f:
+            json.dump(data, f)
+    except IOError as e:
+        return jsonify({'error': f'Failed to save: {str(e)}'}), 500
     return jsonify({'ok': True})
 
 if __name__ == '__main__':

@@ -642,6 +642,12 @@
     color: var(--accent-green);
   }
 
+  .np-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+  }
+
   /* ===== SPOTIFY CONNECT ===== */
   .spotify-connect-btn {
     padding: 8px 18px;
@@ -690,6 +696,11 @@
   .playlist-card:hover { background: #e8e8ed; }
   .playlist-card:active { transform: scale(0.98); }
 
+  .playlist-card.loading {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+
   .playlist-art {
     width: 40px;
     height: 40px;
@@ -736,6 +747,16 @@
     background: rgba(52, 199, 89, 0.1);
     color: #28a745;
     font-weight: 600;
+  }
+
+  .device-btn.loading {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+
+  .device-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   /* ===== QUICK PLAY ===== */
@@ -797,6 +818,29 @@
     box-shadow: var(--shadow-lg);
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.error { background: #e53935; }
+
+  /* ===== BUTTON SPINNER ===== */
+  .btn-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+
+  .btn-spinner.dark {
+    border-color: rgba(0,0,0,0.15);
+    border-top-color: var(--text-dim);
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
 
   /* ===== AUTO WAKE ===== */
   .auto-wake-row {
@@ -1069,9 +1113,9 @@
   </div>
   <div class="np-controls">
     <button class="np-btn" onclick="spotifyShuffle()" id="npShuffle" title="Shuffle">&#8645;</button>
-    <button class="np-btn" onclick="spotifyPrev()" title="Previous">&#9198;</button>
+    <button class="np-btn" onclick="spotifyPrev()" id="npPrevBtn" title="Previous">&#9198;</button>
     <button class="np-btn" onclick="spotifyPlayPause()" id="npPlayBtn" title="Play/Pause">&#9208;</button>
-    <button class="np-btn" onclick="spotifyNext()" title="Next">&#9197;</button>
+    <button class="np-btn" onclick="spotifyNext()" id="npNextBtn" title="Next">&#9197;</button>
   </div>
 </div>
 
@@ -1159,11 +1203,20 @@ async function api(path, method = 'GET', body = null) {
   return res.json();
 }
 
-function toast(msg) {
+function toast(msg, isError) {
   const t = document.getElementById('toast');
   t.textContent = msg;
+  t.classList.toggle('error', !!isError);
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2000);
+  setTimeout(() => t.classList.remove('show'), isError ? 3500 : 2000);
+}
+
+// ===== XSS HELPER =====
+function escapeHtml(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
 }
 
 // ===== CIRCADIAN =====
@@ -1560,7 +1613,7 @@ async function saveCustomSchedule() {
   localStorage.setItem('circadianOverrides', JSON.stringify(circadianOverrides));
 
   // Save to server for the Pi enforcer
-  try { await speakerApi('/api/circadian-brightness', 'POST', { master: saved, overrides: circadianOverrides }); } catch {}
+  try { await speakerApi('/api/circadian-brightness', 'POST', { master: saved, overrides: circadianOverrides }); } catch (e) { /* non-critical */ }
 
   // Recreate bridge schedules with new brightness values
   if (currentMode === 'circadian') {
@@ -2029,11 +2082,80 @@ let speakersData = [];
 let selectedSpeakers = new Set(['kitchen', 'bedroom', 'office']);
 let currentStation = null;
 
-async function speakerApi(path, method = 'GET', body = null) {
-  const opts = { method, headers: { 'Content-Type': 'application/json' } };
-  if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(path, opts);
-  return res.json();
+// ===== FIX #9: Request cancellation for polling =====
+let _pollingAbortController = null;
+
+function cancelPollingRequests() {
+  if (_pollingAbortController) {
+    _pollingAbortController.abort();
+    _pollingAbortController = null;
+  }
+}
+
+// ===== FIX #3: speakerApi with status checking, timeouts, graceful error handling =====
+async function speakerApi(path, method = 'GET', body = null, opts = {}) {
+  const timeoutMs = opts.timeout || 10000;
+  const controller = opts.signal ? null : new AbortController();
+  const signal = opts.signal || (controller ? controller.signal : undefined);
+
+  let timeoutId;
+  if (controller) {
+    timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  }
+
+  try {
+    const fetchOpts = { method, headers: { 'Content-Type': 'application/json' }, signal };
+    if (body) fetchOpts.body = JSON.stringify(body);
+    const res = await fetch(path, fetchOpts);
+    if (timeoutId) clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      let errorMsg = `Server error (${res.status})`;
+      try {
+        const errData = await res.json();
+        if (errData.error) errorMsg = errData.error;
+      } catch (_) {
+        // Response wasn't JSON, that's fine
+      }
+      throw new Error(errorMsg);
+    }
+
+    // Handle non-JSON responses gracefully
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      return await res.json();
+    }
+
+    // Try parsing as JSON anyway, fall back to text
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch (_) {
+      return { ok: true, body: text };
+    }
+  } catch (e) {
+    if (timeoutId) clearTimeout(timeoutId);
+    if (e.name === 'AbortError') {
+      throw new Error('Request timed out');
+    }
+    throw e;
+  }
+}
+
+// ===== FIX #4: Debounce helper for playback controls =====
+const _debounceFlags = {};
+function debounceBtn(btnId, durationMs) {
+  if (!durationMs) durationMs = 1000;
+  const btn = document.getElementById(btnId);
+  if (!btn) return false;
+  if (_debounceFlags[btnId]) return true; // Already debounced — block this click
+  _debounceFlags[btnId] = true;
+  btn.disabled = true;
+  setTimeout(() => {
+    _debounceFlags[btnId] = false;
+    btn.disabled = false;
+  }, durationMs);
+  return false; // Not blocked — proceed
 }
 
 async function loadSpeakers() {
@@ -2076,23 +2198,27 @@ function renderSpeakers() {
       statusText = 'Paused';
     }
 
+    // FIX #6: Sanitize speaker name
+    const safeName = escapeHtml(s.name.replace(' speaker', ''));
+    const safeStatus = escapeHtml(statusText);
+
     html += `
-      <div class="speaker-card ${!selected ? 'inactive' : ''}" id="speaker-${s.id}">
+      <div class="speaker-card ${!selected ? 'inactive' : ''}" id="speaker-${escapeHtml(s.id)}">
         <div class="speaker-top">
-          <span class="speaker-name">${s.name.replace(' speaker', '')}</span>
+          <span class="speaker-name">${safeName}</span>
           <label class="toggle">
-            <input type="checkbox" ${selected ? 'checked' : ''} onchange="toggleSpeaker('${s.id}', this.checked)">
+            <input type="checkbox" ${selected ? 'checked' : ''} onchange="toggleSpeaker('${escapeHtml(s.id)}', this.checked)">
             <span class="toggle-track"></span>
             <span class="toggle-thumb"></span>
           </label>
         </div>
-        <div class="speaker-status ${isPlaying ? 'playing' : ''}">${statusText}</div>
+        <div class="speaker-status ${isPlaying ? 'playing' : ''}">${safeStatus}</div>
         <div class="bri-row">
           <span class="bri-label">Volume</span>
           <input type="range" min="0" max="100" value="${vol}"
-            oninput="document.getElementById('vol-${s.id}').textContent = this.value + '%'"
-            onchange="setSpeakerVolume('${s.id}', this.value)">
-          <span class="bri-value" id="vol-${s.id}">${vol}%</span>
+            oninput="document.getElementById('vol-${escapeHtml(s.id)}').textContent = this.value + '%'"
+            onchange="setSpeakerVolume('${escapeHtml(s.id)}', this.value)">
+          <span class="bri-value" id="vol-${escapeHtml(s.id)}">${vol}%</span>
         </div>
       </div>`;
   }
@@ -2115,12 +2241,21 @@ function toggleSpeaker(id, on) {
 }
 
 async function setSpeakerVolume(id, level) {
-  await speakerApi(`/api/speakers/${id}/volume`, 'POST', { level: parseInt(level) });
+  try {
+    await speakerApi(`/api/speakers/${id}/volume`, 'POST', { level: parseInt(level) });
+  } catch (e) {
+    toast('Failed to set volume: ' + e.message, true);
+  }
 }
 
 async function setMasterVolume(level) {
   level = parseInt(level);
-  await speakerApi('/api/speakers/all/volume', 'POST', { level });
+  try {
+    await speakerApi('/api/speakers/all/volume', 'POST', { level });
+  } catch (e) {
+    toast('Failed to set master volume: ' + e.message, true);
+    return;
+  }
   document.querySelectorAll('.speaker-card input[type="range"]').forEach(slider => {
     slider.value = level;
   });
@@ -2132,8 +2267,13 @@ async function setMasterVolume(level) {
 
 async function transportAll(action) {
   const ids = [...selectedSpeakers];
-  for (const id of ids) {
-    await speakerApi(`/api/speakers/${id}/${action}`, 'POST', {});
+  try {
+    for (const id of ids) {
+      await speakerApi(`/api/speakers/${id}/${action}`, 'POST', {});
+    }
+  } catch (e) {
+    toast('Transport failed: ' + e.message, true);
+    return;
   }
   if (action === 'stop') {
     currentStation = null;
@@ -2152,13 +2292,19 @@ async function castStation(index) {
   currentStation = index;
   renderStations();
   toast(`Starting ${station.name}...`);
-  await speakerApi('/api/speakers/cast', 'POST', {
-    url: station.url,
-    content_type: station.type,
-    title: station.name,
-    speakers: ids
-  });
-  toast(`Playing ${station.name} on ${ids.length} speaker${ids.length > 1 ? 's' : ''}`);
+  try {
+    await speakerApi('/api/speakers/cast', 'POST', {
+      url: station.url,
+      content_type: station.type,
+      title: station.name,
+      speakers: ids
+    });
+    toast(`Playing ${station.name} on ${ids.length} speaker${ids.length > 1 ? 's' : ''}`);
+  } catch (e) {
+    currentStation = null;
+    renderStations();
+    toast('Failed to start station: ' + e.message, true);
+  }
   setTimeout(loadSpeakers, 2000);
 }
 
@@ -2166,8 +2312,8 @@ function renderStations() {
   const el = document.getElementById('stationButtons');
   el.innerHTML = STATIONS.map((s, i) => `
     <button class="station-btn ${currentStation === i ? 'playing' : ''}"
-      onclick="castStation(${i})" title="${s.desc}">
-      ${s.name}
+      onclick="castStation(${i})" title="${escapeHtml(s.desc)}">
+      ${escapeHtml(s.name)}
     </button>
   `).join('');
 }
@@ -2180,6 +2326,7 @@ function renderStations() {
 let spotifyConnected = false;
 let spotifyPlayer = null;
 let spotifyDevices = [];
+let _lastAlbumArtUrl = ''; // FIX #10: Track last album art to avoid flicker
 
 async function checkSpotify() {
   try {
@@ -2197,7 +2344,9 @@ async function checkSpotify() {
       el.innerHTML = '<a href="/spotify/login" class="spotify-connect-btn" target="_blank" onclick="showPasteField()">Connect Spotify</a>';
       document.getElementById('spotifyPasteSection').style.display = 'none';
     }
-  } catch (e) {}
+  } catch (e) {
+    toast('Could not check Spotify status', true);
+  }
 }
 
 function showPasteField() {
@@ -2217,20 +2366,27 @@ async function submitSpotifyCode() {
       input.value = '';
       checkSpotify();
     } else {
-      toast('Error: ' + (res.error || 'Failed'));
+      toast('Error: ' + (res.error || 'Failed'), true);
     }
   } catch (e) {
-    toast('Connection failed');
+    toast('Connection failed: ' + e.message, true);
   }
 }
 
 async function loadSpotifyPlayer() {
   if (!spotifyConnected) return;
+  // FIX #9: Use cancellable polling
+  cancelPollingRequests();
+  _pollingAbortController = new AbortController();
   try {
-    const data = await speakerApi('/api/spotify/player');
+    const data = await speakerApi('/api/spotify/player', 'GET', null, { signal: _pollingAbortController.signal });
     spotifyPlayer = data;
     renderNowPlaying(data);
-  } catch (e) {}
+  } catch (e) {
+    if (e.message !== 'Request timed out' && e.name !== 'AbortError') {
+      // Silent fail for polling — don't spam toasts
+    }
+  }
 }
 
 function renderNowPlaying(data) {
@@ -2243,42 +2399,67 @@ function renderNowPlaying(data) {
 
   const track = data.item;
   const art = track.album?.images?.[1]?.url || track.album?.images?.[0]?.url || '';
-  document.getElementById('npArt').src = art;
+
+  // FIX #10: Only update image src if it actually changed
+  const artEl = document.getElementById('npArt');
+  if (artEl.src !== art && art) {
+    artEl.src = art;
+    _lastAlbumArtUrl = art;
+  } else if (!art && _lastAlbumArtUrl) {
+    // Keep showing the last known art
+  }
+
   document.getElementById('npTrack').textContent = track.name;
   document.getElementById('npArtist').textContent = track.artists?.map(a => a.name).join(', ') || '';
-  document.getElementById('npDevice').textContent = data.device ? 'Playing on ' + data.device.name : '';
+
+  // FIX #6: Sanitize device name
+  const deviceEl = document.getElementById('npDevice');
+  deviceEl.textContent = data.device ? 'Playing on ' + data.device.name : '';
 
   const playBtn = document.getElementById('npPlayBtn');
-  playBtn.innerHTML = data.is_playing ? '&#9208;' : '&#9654;';
+  // Only update play/pause icon if we're not in the middle of an optimistic toggle
+  if (!playBtn.dataset.optimistic) {
+    playBtn.innerHTML = data.is_playing ? '&#9208;' : '&#9654;';
+  }
 
   const shuffleBtn = document.getElementById('npShuffle');
   shuffleBtn.classList.toggle('active', data.shuffle_state);
 }
 
+// FIX #6 & #7: Sanitize playlist names, add loading state
 async function loadSpotifyPlaylists() {
   if (!spotifyConnected) return;
   try {
     const data = await speakerApi('/api/spotify/playlists');
     const el = document.getElementById('spotifyPlaylists');
     if (!data.items) return;
-    el.innerHTML = data.items.map(pl => {
+    el.innerHTML = data.items.map((pl, idx) => {
       const art = pl.images?.[0]?.url || '';
+      const safeName = escapeHtml(pl.name);
+      const safeUri = escapeHtml(pl.uri);
       return `
-        <div class="playlist-card" onclick="playPlaylist('${pl.uri}')">
-          ${art ? `<img class="playlist-art" src="${art}" alt="">` : '<div class="playlist-art"></div>'}
-          <span class="playlist-name">${pl.name}</span>
+        <div class="playlist-card" onclick="playPlaylist('${safeUri}', this)" id="playlist-${idx}">
+          ${art ? `<img class="playlist-art" src="${escapeHtml(art)}" alt="">` : '<div class="playlist-art"></div>'}
+          <span class="playlist-name">${safeName}</span>
         </div>`;
     }).join('');
-  } catch (e) {}
+  } catch (e) {
+    toast('Failed to load playlists: ' + e.message, true);
+  }
 }
 
+// FIX #6 & #8: Sanitize device names, add loading/transfer feedback
 async function loadSpotifyDevices() {
   if (!spotifyConnected) return;
   try {
     const data = await speakerApi('/api/spotify/devices');
     spotifyDevices = data.devices || [];
     renderDevices();
-  } catch (e) {}
+  } catch (e) {
+    if (e.message !== 'Request timed out') {
+      toast('Failed to load devices: ' + e.message, true);
+    }
+  }
 }
 
 function renderDevices() {
@@ -2287,56 +2468,167 @@ function renderDevices() {
     el.innerHTML = '<span style="font-size:12px;color:var(--text-dim)">No active Spotify devices. Start playing on your phone first, then transfer here.</span>';
     return;
   }
-  el.innerHTML = spotifyDevices.map(d => `
-    <button class="device-btn ${d.is_active ? 'active-device' : ''}"
-      onclick="transferPlayback('${d.id}')">
-      ${d.name}
-    </button>
-  `).join('');
+  el.innerHTML = spotifyDevices.map(d => {
+    const safeName = escapeHtml(d.name);
+    const safeId = escapeHtml(d.id);
+    // FIX #1: Everywhere button gets special handling
+    const isEverywhere = d.name.toLowerCase().includes('everywhere');
+    return `
+      <button class="device-btn ${d.is_active ? 'active-device' : ''}"
+        onclick="transferPlayback('${safeId}', this, ${isEverywhere})"
+        id="device-${safeId}">
+        ${safeName}
+      </button>`;
+  }).join('');
 }
 
-async function playPlaylist(uri) {
-  // If there's an active device, play on it. Otherwise pick first available.
+// FIX #7: Playlist loading state
+async function playPlaylist(uri, cardEl) {
+  // FIX #9: Cancel polling before user action
+  cancelPollingRequests();
+
+  // Show loading state on the clicked card
+  if (cardEl) {
+    cardEl.classList.add('loading');
+    const nameEl = cardEl.querySelector('.playlist-name');
+    if (nameEl) {
+      nameEl.dataset.origText = nameEl.textContent;
+      nameEl.textContent = 'Loading...';
+    }
+  }
+
   const activeDevice = spotifyDevices.find(d => d.is_active);
   const device = activeDevice || spotifyDevices[0];
   const body = { context_uri: uri };
   if (device) body.device_id = device.id;
-  await speakerApi('/api/spotify/play', 'PUT', body);
-  toast('Playing playlist');
+
+  try {
+    await speakerApi('/api/spotify/play', 'PUT', body);
+    toast('Playing playlist');
+  } catch (e) {
+    toast('Failed to play playlist: ' + e.message, true);
+  }
+
+  // Remove loading state
+  if (cardEl) {
+    cardEl.classList.remove('loading');
+    const nameEl = cardEl.querySelector('.playlist-name');
+    if (nameEl && nameEl.dataset.origText) {
+      nameEl.textContent = nameEl.dataset.origText;
+      delete nameEl.dataset.origText;
+    }
+  }
+
   setTimeout(loadSpotifyPlayer, 1000);
   setTimeout(loadSpotifyDevices, 1000);
 }
 
-async function transferPlayback(deviceId) {
-  await speakerApi('/api/spotify/transfer', 'PUT', { device_ids: [deviceId] });
-  toast('Transferred playback');
-  setTimeout(loadSpotifyPlayer, 1000);
-  setTimeout(loadSpotifyDevices, 1000);
-}
+// FIX #1 & #8: Loading state on Everywhere + device transfer feedback
+async function transferPlayback(deviceId, btnEl, isEverywhere) {
+  // FIX #9: Cancel polling before user action
+  cancelPollingRequests();
 
-async function spotifyPlayPause() {
-  if (spotifyPlayer?.is_playing) {
-    await speakerApi('/api/spotify/pause', 'PUT', {});
+  const timeoutMs = isEverywhere ? 30000 : 10000;
+
+  if (btnEl) {
+    btnEl.disabled = true;
+    btnEl.classList.add('loading');
+    const origText = btnEl.textContent;
+    if (isEverywhere) {
+      btnEl.innerHTML = '<span class="btn-spinner dark"></span>Connecting speakers...';
+    } else {
+      btnEl.innerHTML = '<span class="btn-spinner dark"></span>Transferring...';
+    }
+
+    try {
+      await speakerApi('/api/spotify/transfer', 'PUT', { device_ids: [deviceId] }, { timeout: timeoutMs });
+      toast(isEverywhere ? 'Connected to all speakers' : 'Transferred playback');
+    } catch (e) {
+      toast((isEverywhere ? 'Everywhere failed: ' : 'Transfer failed: ') + e.message, true);
+    }
+
+    btnEl.disabled = false;
+    btnEl.classList.remove('loading');
+    btnEl.textContent = origText;
   } else {
-    await speakerApi('/api/spotify/play', 'PUT', {});
+    try {
+      await speakerApi('/api/spotify/transfer', 'PUT', { device_ids: [deviceId] }, { timeout: timeoutMs });
+      toast('Transferred playback');
+    } catch (e) {
+      toast('Transfer failed: ' + e.message, true);
+    }
+  }
+
+  setTimeout(loadSpotifyPlayer, 1000);
+  setTimeout(loadSpotifyDevices, 1000);
+}
+
+// FIX #4 & #5: Debounce + optimistic UI for play/pause
+async function spotifyPlayPause() {
+  if (debounceBtn('npPlayBtn', 1000)) return;
+
+  // FIX #9: Cancel polling before user action
+  cancelPollingRequests();
+
+  // FIX #5: Optimistic UI — toggle icon immediately
+  const playBtn = document.getElementById('npPlayBtn');
+  const wasPlaying = spotifyPlayer?.is_playing;
+  playBtn.dataset.optimistic = '1';
+  playBtn.innerHTML = wasPlaying ? '&#9654;' : '&#9208;';
+
+  try {
+    if (wasPlaying) {
+      await speakerApi('/api/spotify/pause', 'PUT', {});
+    } else {
+      await speakerApi('/api/spotify/play', 'PUT', {});
+    }
+    // Update local state optimistically
+    if (spotifyPlayer) spotifyPlayer.is_playing = !wasPlaying;
+  } catch (e) {
+    // FIX #5: Revert on failure
+    playBtn.innerHTML = wasPlaying ? '&#9208;' : '&#9654;';
+    toast('Playback failed: ' + e.message, true);
+  }
+
+  delete playBtn.dataset.optimistic;
+  setTimeout(loadSpotifyPlayer, 500);
+}
+
+// FIX #4: Debounce next
+async function spotifyNext() {
+  if (debounceBtn('npNextBtn', 1000)) return;
+  cancelPollingRequests();
+  try {
+    await speakerApi('/api/spotify/next', 'POST', {});
+  } catch (e) {
+    toast('Skip failed: ' + e.message, true);
   }
   setTimeout(loadSpotifyPlayer, 500);
 }
 
-async function spotifyNext() {
-  await speakerApi('/api/spotify/next', 'POST', {});
-  setTimeout(loadSpotifyPlayer, 500);
-}
-
+// FIX #4: Debounce previous
 async function spotifyPrev() {
-  await speakerApi('/api/spotify/previous', 'POST', {});
+  if (debounceBtn('npPrevBtn', 1000)) return;
+  cancelPollingRequests();
+  try {
+    await speakerApi('/api/spotify/previous', 'POST', {});
+  } catch (e) {
+    toast('Previous failed: ' + e.message, true);
+  }
   setTimeout(loadSpotifyPlayer, 500);
 }
 
+// FIX #4: Debounce shuffle
 async function spotifyShuffle() {
+  if (debounceBtn('npShuffle', 1000)) return;
+  cancelPollingRequests();
   const newState = !(spotifyPlayer?.shuffle_state);
-  await speakerApi('/api/spotify/shuffle', 'PUT', { state: newState });
-  toast(newState ? 'Shuffle on' : 'Shuffle off');
+  try {
+    await speakerApi('/api/spotify/shuffle', 'PUT', { state: newState });
+    toast(newState ? 'Shuffle on' : 'Shuffle off');
+  } catch (e) {
+    toast('Shuffle failed: ' + e.message, true);
+  }
   setTimeout(loadSpotifyPlayer, 500);
 }
 
