@@ -1296,7 +1296,7 @@ async function activateCircadian() {
     for (const step of CIRCADIAN_STEPS) {
       await api('/schedules', 'POST', {
         name: `${CIRCADIAN_PREFIX} ${step.time.replace(':','')}`,
-        command: { address: addr, method: 'PUT', body: Object.assign({ ct: step.ct, bri: step.bri, transitiontime: step.transition }, step.turnOn ? { on: true } : {}) },
+        command: { address: addr, method: 'PUT', body: { ct: step.ct, bri: step.bri, transitiontime: step.transition } },
         localtime: `W127/T${step.time}:00`,
         status: 'enabled'
       });
@@ -1572,7 +1572,7 @@ function renderStepCard(step, i) {
     <div>
       <div class="step-row">
         <span class="step-time">${formatTime12(step.time)}</span>
-        ${step.turnOn ? '<span class="step-tag">Lights On</span>' : `<span class="step-temp">${ctToKelvin(step.ct)}K</span>`}
+        <span class="step-temp">${ctToKelvin(step.ct)}K</span>
         <input type="range" min="1" max="254" value="${step.bri}" data-master-idx="${i}"
           oninput="onMasterBriChange(${i}, this.value)">
         <span class="step-bri" id="stepBri${i}">${pct}%</span>
@@ -1645,7 +1645,7 @@ async function saveCustomSchedule() {
           if (!roomOn) {
             body = { on: false };
           } else {
-            body = Object.assign({ ct: step.ct, bri, transitiontime: step.transition }, (step.turnOn || !getEffectiveRoomOn(gid, stepIdx - 1)) ? { on: true } : {});
+            body = { ct: step.ct, bri, transitiontime: step.transition };
           }
           await api('/schedules', 'POST', {
             name: `${CIRCADIAN_PREFIX} ${step.time.replace(':', '')}-g${gid}`,
@@ -1658,7 +1658,7 @@ async function saveCustomSchedule() {
         // Single schedule for all
         await api('/schedules', 'POST', {
           name: `${CIRCADIAN_PREFIX} ${step.time.replace(':', '')}`,
-          command: { address: `${addrPrefix}/groups/0/action`, method: 'PUT', body: Object.assign({ ct: step.ct, bri: step.bri, transitiontime: step.transition }, step.turnOn ? { on: true } : {}) },
+          command: { address: `${addrPrefix}/groups/0/action`, method: 'PUT', body: { ct: step.ct, bri: step.bri, transitiontime: step.transition } },
           localtime: `W127/T${step.time}:00`,
           status: 'enabled'
         });
