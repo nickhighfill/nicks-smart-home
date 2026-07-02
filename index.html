@@ -120,6 +120,11 @@
     transition: all 0.2s;
   }
   .emergency-resume-btn:hover { background: #f0faf3; }
+  .emergency-expiry {
+    font-size: 13px;
+    color: var(--text-dim);
+    font-weight: 500;
+  }
   .emergency-btn.active + .emergency-controls { display: flex !important; }
 
   /* ===== SECTION HEADERS ===== */
@@ -1068,6 +1073,7 @@
   <div class="emergency-controls" id="emergencyControls" style="display:none;">
     <input type="range" min="1" max="254" value="254" id="emergencyBri" class="emergency-slider" oninput="updateEmergencyBri(this.value)">
     <span class="emergency-bri-label" id="emergencyBriLabel">100%</span>
+    <span class="emergency-expiry" id="emergencyExpiry" style="display:none;"></span>
     <button class="emergency-resume-btn" onclick="resumeFromEmergency()">Resume Circadian</button>
   </div>
 </div>
@@ -2096,6 +2102,7 @@ async function loadSchedules() {
 // ===== EMERGENCY OVERRIDE =====
 let emergencyActive = false;
 let emergencyLights = []; // track which lights were on when emergency started
+let emergencyTimer = null;
 
 async function toggleEmergency() {
   if (emergencyActive) {
@@ -2133,7 +2140,18 @@ async function toggleEmergency() {
     await api(`/groups/${gid}/action`, 'PUT', { bri, transitiontime: 5 });
   }
 
-  toast(`Override ON — ${Math.round(bri / 254 * 100)}%`);
+  // Auto-expire at 11:59 PM tonight
+  const now = new Date();
+  const expire = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 0);
+  if (expire <= now) expire.setDate(expire.getDate() + 1); // past 11:59, set for tomorrow
+  const msUntilExpire = expire - now;
+  emergencyTimer = setTimeout(() => resumeFromEmergency(), msUntilExpire);
+
+  const expireStr = expire.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  document.getElementById('emergencyExpiry').textContent = `Expires ${expireStr}`;
+  document.getElementById('emergencyExpiry').style.display = 'inline';
+
+  toast(`Override ON — expires ${expireStr}`);
 }
 
 function updateEmergencyBri(val) {
@@ -2153,12 +2171,14 @@ function updateEmergencyBri(val) {
 
 async function resumeFromEmergency() {
   emergencyActive = false;
+  if (emergencyTimer) { clearTimeout(emergencyTimer); emergencyTimer = null; }
   const btn = document.getElementById('emergencyBtn');
   const controls = document.getElementById('emergencyControls');
   btn.classList.remove('active');
   btn.textContent = 'Bright Override';
   btn.style.borderRadius = '16px';
   controls.style.display = 'none';
+  document.getElementById('emergencyExpiry').style.display = 'none';
 
   // Resume circadian — apply current circadian values to lights that were on
   if (currentMode === 'circadian') {
