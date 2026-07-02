@@ -61,6 +61,67 @@
     background: var(--accent-green); margin-right: 6px; vertical-align: middle;
   }
 
+  /* ===== EMERGENCY OVERRIDE ===== */
+  .emergency-bar {
+    margin-bottom: 20px;
+  }
+  .emergency-btn {
+    width: 100%;
+    padding: 16px 24px;
+    border: 2px solid #ff3b30;
+    border-radius: 16px;
+    background: white;
+    color: #ff3b30;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s;
+  }
+  .emergency-btn:hover { background: #fff5f5; }
+  .emergency-btn.active {
+    background: #ff3b30;
+    color: white;
+    border-color: #ff3b30;
+  }
+  .emergency-controls {
+    background: var(--card);
+    border: 2px solid #ff3b30;
+    border-top: none;
+    border-radius: 0 0 16px 16px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .emergency-slider {
+    flex: 1;
+    min-width: 120px;
+    accent-color: #ff3b30;
+    height: 6px;
+  }
+  .emergency-bri-label {
+    font-weight: 600;
+    font-size: 15px;
+    min-width: 45px;
+    text-align: right;
+  }
+  .emergency-resume-btn {
+    padding: 10px 20px;
+    border: 1.5px solid var(--accent-green);
+    border-radius: 100px;
+    background: white;
+    color: #28a745;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s;
+  }
+  .emergency-resume-btn:hover { background: #f0faf3; }
+  .emergency-btn.active + .emergency-controls { display: flex !important; }
+
   /* ===== SECTION HEADERS ===== */
   .section-header {
     display: flex;
@@ -1000,6 +1061,16 @@
   <h1>Nick's Smart Home</h1>
   <span class="status" id="status"><span class="dot"></span>Connected to Bridge</span>
 </header>
+
+<!-- Emergency Override -->
+<div class="emergency-bar" id="emergencyBar">
+  <button class="emergency-btn" id="emergencyBtn" onclick="toggleEmergency()">Bright Override</button>
+  <div class="emergency-controls" id="emergencyControls" style="display:none;">
+    <input type="range" min="1" max="254" value="254" id="emergencyBri" class="emergency-slider" oninput="updateEmergencyBri(this.value)">
+    <span class="emergency-bri-label" id="emergencyBriLabel">100%</span>
+    <button class="emergency-resume-btn" onclick="resumeFromEmergency()">Resume Circadian</button>
+  </div>
+</div>
 
 <!-- ==================== LIGHTING ==================== -->
 <div class="section-header">
@@ -2022,14 +2093,101 @@ async function loadSchedules() {
   updateModeUI();
 }
 
+// ===== EMERGENCY OVERRIDE =====
+let emergencyActive = false;
+let emergencyLights = []; // track which lights were on when emergency started
+
+async function toggleEmergency() {
+  if (emergencyActive) {
+    // Already active — clicking again just keeps it on (use Resume to exit)
+    return;
+  }
+
+  emergencyActive = true;
+  const btn = document.getElementById('emergencyBtn');
+  const controls = document.getElementById('emergencyControls');
+  btn.classList.add('active');
+  btn.textContent = 'Override Active';
+  btn.style.borderRadius = '16px 16px 0 0';
+  controls.style.display = 'flex';
+
+  // Remember which lights are currently on and get their avg brightness
+  emergencyLights = [];
+  let totalBri = 0, briCount = 0;
+  for (const [lid, light] of Object.entries(lightsData)) {
+    if (light.state.on) {
+      emergencyLights.push(lid);
+      totalBri += light.state.bri;
+      briCount++;
+    }
+  }
+
+  // Set slider to current brightness
+  const currentBri = briCount > 0 ? Math.round(totalBri / briCount) : 254;
+  document.getElementById('emergencyBri').value = currentBri;
+  document.getElementById('emergencyBriLabel').textContent = `${Math.round(currentBri / 254 * 100)}%`;
+
+  const bri = currentBri;
+  for (const [gid, group] of Object.entries(groupsData)) {
+    if (group.type !== 'Room' || !group.state.any_on) continue;
+    await api(`/groups/${gid}/action`, 'PUT', { bri, transitiontime: 5 });
+  }
+
+  toast(`Override ON — ${Math.round(bri / 254 * 100)}%`);
+}
+
+function updateEmergencyBri(val) {
+  const pct = Math.round(val / 254 * 100);
+  document.getElementById('emergencyBriLabel').textContent = `${pct}%`;
+  if (!emergencyActive) return;
+
+  const bri = parseInt(val);
+  // Fire all groups in parallel with instant transition
+  const promises = [];
+  for (const [gid, group] of Object.entries(groupsData)) {
+    if (group.type !== 'Room' || !group.state.any_on) continue;
+    promises.push(api(`/groups/${gid}/action`, 'PUT', { bri, transitiontime: 0 }));
+  }
+  Promise.all(promises);
+}
+
+async function resumeFromEmergency() {
+  emergencyActive = false;
+  const btn = document.getElementById('emergencyBtn');
+  const controls = document.getElementById('emergencyControls');
+  btn.classList.remove('active');
+  btn.textContent = 'Bright Override';
+  btn.style.borderRadius = '16px';
+  controls.style.display = 'none';
+
+  // Resume circadian — apply current circadian values to lights that were on
+  if (currentMode === 'circadian') {
+    const { ct, bri } = getCircadianNow();
+    for (const [gid, group] of Object.entries(groupsData)) {
+      if (group.type !== 'Room' || !group.state.any_on) continue;
+      await api(`/groups/${gid}/action`, 'PUT', { ct, bri, transitiontime: 30 });
+    }
+  }
+
+  emergencyLights = [];
+  toast('Circadian resumed');
+  loadLights();
+}
+
 // ===== CIRCADIAN ENFORCER =====
 let prevLightStates = {};
+let lastDriftCorrection = 0;
+const DRIFT_INTERVAL = 900000; // 15 minutes in ms
+const DRIFT_TRANSITION = 9000; // 15-minute slow transition (1/10s units)
 
 async function enforceCircadian() {
   if (currentMode !== 'circadian') return;
+  if (emergencyActive) return;
 
   const { ct: targetCt, bri: targetBri } = getCircadianNow();
   const tolerance = 15;
+  const now = Date.now();
+  const doDrift = (now - lastDriftCorrection) >= DRIFT_INTERVAL;
 
   for (const [gid, group] of Object.entries(groupsData)) {
     if (group.type !== 'Room' || group.lights.length === 0) continue;
@@ -2049,13 +2207,15 @@ async function enforceCircadian() {
     }
 
     if (anyJustOn) {
-      // Light just turned on — set both ct and bri
+      // Light just turned on — set both ct and bri immediately
       await api(`/groups/${gid}/action`, 'PUT', { ct: targetCt, bri: targetBri, transitiontime: 30 });
-    } else if (anyCtOff) {
-      // Only ct is wrong — fix ct, leave brightness alone
-      await api(`/groups/${gid}/action`, 'PUT', { ct: targetCt, transitiontime: 30 });
+    } else if (anyCtOff && doDrift) {
+      // Already-on light drifted — correct with slow transition (only every 15 min)
+      await api(`/groups/${gid}/action`, 'PUT', { ct: targetCt, transitiontime: DRIFT_TRANSITION });
     }
   }
+
+  if (doDrift) lastDriftCorrection = now;
 
   for (const [lid, light] of Object.entries(lightsData)) {
     prevLightStates[lid] = light.state.on;

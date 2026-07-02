@@ -31,9 +31,12 @@ CIRCADIAN_STEPS = [
 
 CT_TOLERANCE = 15
 CHECK_INTERVAL = 10
+DRIFT_INTERVAL = 900  # Only correct already-on lights every 15 minutes
+DRIFT_TRANSITION = 9000  # 15-minute slow transition (in 1/10s units) so changes are imperceptible
 BRIGHTNESS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.circadian_brightness.json')
 
 prev_light_states = {}
+last_drift_correction = 0  # timestamp of last drift correction for already-on lights
 
 
 room_overrides = {}
@@ -153,11 +156,14 @@ def get_room_override(gid, target_bri, prev_step, next_step, progress, prev_idx)
 
 
 def enforce():
-    global prev_light_states
+    global prev_light_states, last_drift_correction
 
     target_ct, target_bri, prev_step, next_step, progress, prev_idx = get_circadian_now()
     lights = api_get('/lights')
     groups = api_get('/groups')
+
+    now = time.time()
+    do_drift = (now - last_drift_correction) >= DRIFT_INTERVAL
 
     for gid, group in groups.items():
         if group.get('type') != 'Room' or not group.get('lights'):
@@ -168,7 +174,6 @@ def enforce():
         room_bri, room_on = get_room_override(gid, target_bri, prev_step, next_step, progress, prev_idx)
 
         if not room_on:
-            # Room should be off at this time — skip enforcement
             continue
 
         any_just_on = False
@@ -187,11 +192,14 @@ def enforce():
                 any_ct_off = True
 
         if any_just_on:
-            # Light just turned on — set both ct and bri
+            # Light just turned on — set both ct and bri immediately
             api_put(f'/groups/{gid}/action', {'ct': target_ct, 'bri': room_bri, 'transitiontime': 30})
-        elif any_ct_off:
-            # Only ct is wrong — fix ct but don't touch brightness
-            api_put(f'/groups/{gid}/action', {'ct': target_ct, 'transitiontime': 30})
+        elif any_ct_off and do_drift:
+            # Already-on light drifted — correct with slow transition (only every 15 min)
+            api_put(f'/groups/{gid}/action', {'ct': target_ct, 'transitiontime': DRIFT_TRANSITION})
+
+    if do_drift:
+        last_drift_correction = now
 
     prev_light_states = {lid: light['state']['on'] for lid, light in lights.items()}
 
