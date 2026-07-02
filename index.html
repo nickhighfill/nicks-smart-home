@@ -1071,7 +1071,7 @@
 <div class="emergency-bar" id="emergencyBar">
   <button class="emergency-btn" id="emergencyBtn" onclick="toggleEmergency()">Bright Override</button>
   <div class="emergency-controls" id="emergencyControls" style="display:none;">
-    <input type="range" min="1" max="254" value="254" id="emergencyBri" class="emergency-slider" oninput="updateEmergencyBri(this.value)">
+    <input type="range" min="1" max="254" value="254" id="emergencyBri" class="emergency-slider" oninput="previewEmergencyBri(this.value)" onchange="applyEmergencyBri(this.value)">
     <span class="emergency-bri-label" id="emergencyBriLabel">100%</span>
     <span class="emergency-expiry" id="emergencyExpiry" style="display:none;"></span>
     <button class="emergency-resume-btn" onclick="resumeFromEmergency()">Resume Circadian</button>
@@ -2151,22 +2151,15 @@ async function toggleEmergency() {
   toast(`Override ON — expires ${expireStr}`);
 }
 
-let _emergencyBriPending = null;
-let _emergencyBriTimer = null;
+function previewEmergencyBri(val) {
+  document.getElementById('emergencyBriLabel').textContent = `${Math.round(val / 254 * 100)}%`;
+}
 
-function updateEmergencyBri(val) {
-  const pct = Math.round(val / 254 * 100);
-  document.getElementById('emergencyBriLabel').textContent = `${pct}%`;
+function applyEmergencyBri(val) {
+  document.getElementById('emergencyBriLabel').textContent = `${Math.round(val / 254 * 100)}%`;
   if (!emergencyActive) return;
-
-  // Throttle to one API call per 100ms — fast enough to feel instant, won't flood the bridge
-  _emergencyBriPending = parseInt(val);
-  if (!_emergencyBriTimer) {
-    _emergencyBriTimer = setTimeout(() => {
-      api('/groups/0/action', 'PUT', { bri: _emergencyBriPending, transitiontime: 0 });
-      _emergencyBriTimer = null;
-    }, 100);
-  }
+  // One smooth transition when you release the slider (10 = 1 second)
+  api('/groups/0/action', 'PUT', { bri: parseInt(val), transitiontime: 10 });
 }
 
 async function resumeFromEmergency() {
